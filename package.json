@@ -1,0 +1,38 @@
+{
+  "name": "k6ctl",
+  "version": "0.1.0",
+  "description": "CLI tool to run k6 tests on Kubernetes using k6-operator",
+  "main": "dist/index.js",
+  "bin": {
+    "k6ctl": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "k6",
+    "kubernetes",
+    "k6-operator",
+    "load-testing",
+    "performance-testing",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
+    "commander": "^14.0.3",
+    "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
