@@ -5,7 +5,7 @@ export interface K6Config {
   cleanup?: boolean;
   quiet?: boolean;
   separate?: boolean;
-  runner: {
+  runner?: {
     image?: string;
     resources?: {
       limits: {
@@ -17,10 +17,6 @@ export interface K6Config {
         memory: string;
       };
     };
-    env?: Array<{
-      name: string;
-      value: string;
-    }>;
   }
   prometheus?: {
     serverUrl: string;
