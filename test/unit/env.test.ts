@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, jest, it } from '@jest/globals';
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -500,7 +501,7 @@ describe("Imprimir todas las variables de ambiente", () => {
     // TODO: Es una prueba de integración
     // TODO: Debe crear .env como precondición
     // Usar fs real temporalmente
-    const realFs = jest.requireActual("fs");
+    const realFs: any = jest.requireActual("fs");
     
     mockedFs.existsSync.mockImplementation(realFs.existsSync);
     mockedFs.readFileSync.mockImplementation(realFs.readFileSync);
