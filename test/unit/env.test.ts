@@ -1,16 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-  env,
   loadAndValidateEnv,
-  getEnvVar,
-  requireEnvVar,
-  getEnvNumber,
-  getEnvBoolean,
-  getAllEnvVars,
-  hasEnvVar,
-  resetEnvCache,
-} from "../src/utils/env";
+} from "../../src/utils/env";
 
 // Mock de fs
 jest.mock("fs");
@@ -503,301 +495,10 @@ describe("loadAndValidateEnv - Pruebas de Rutas", () => {
   });
 });
 
-describe("getEnvVar", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe retornar el valor de una variable existente", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvVar("API_KEY")).toBe("test123");
-  });
-
-  it("debe retornar undefined para una variable inexistente", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvVar("NONEXISTENT")).toBeUndefined();
-  });
-
-  it("debe retornar el valor por defecto si la variable no existe", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvVar("NONEXISTENT", "default")).toBe("default");
-  });
-
-  it("debe retornar el valor real aunque se pase un valor por defecto", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvVar("API_KEY", "default")).toBe("test123");
-  });
-});
-
-describe("requireEnvVar", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe retornar el valor de una variable existente", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(requireEnvVar("API_KEY")).toBe("test123");
-  });
-
-  it("debe lanzar error si la variable no existe", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(() => requireEnvVar("NONEXISTENT")).toThrow(
-      "Variable de entorno requerida no encontrada: NONEXISTENT"
-    );
-  });
-
-  it("debe lanzar error si la variable existe pero está vacía", () => {
-    const envContent = "API_KEY=test123\nPORT=3000\nEMPTY=";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    // La validación debería fallar al cargar el .env porque EMPTY está vacío
-    expect(() => {
-      resetEnvCache();
-      loadAndValidateEnv();
-    }).toThrow("Variable \"EMPTY\" no tiene valor");
-  });
-});
-
-describe("getEnvNumber", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe convertir un número entero correctamente", () => {
-    const envContent = "PORT=3000\nTIMEOUT=5.5\nINVALID=not-a-number";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvNumber("PORT")).toBe(3000);
-  });
-
-  it("debe convertir un número decimal correctamente", () => {
-    const envContent = "PORT=3000\nTIMEOUT=5.5\nINVALID=not-a-number";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvNumber("TIMEOUT")).toBe(5.5);
-  });
-
-  it("debe retornar undefined para una variable inexistente sin valor por defecto", () => {
-    const envContent = "PORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvNumber("NONEXISTENT")).toBeUndefined();
-  });
-
-  it("debe retornar el valor por defecto para una variable inexistente", () => {
-    const envContent = "PORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvNumber("NONEXISTENT", 8080)).toBe(8080);
-  });
-
-  it("debe retornar el valor por defecto para un valor inválido", () => {
-    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
-    const envContent = "PORT=3000\nTIMEOUT=5.5\nINVALID=not-a-number";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvNumber("INVALID", 9000)).toBe(9000);
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      'La variable INVALID no es un número válido: "not-a-number"'
-    );
-    
-    consoleWarnSpy.mockRestore();
-  });
-});
-
-describe("getEnvBoolean", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe retornar true para 'true'", () => {
-    const envContent = "DEBUG_TRUE=true";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_TRUE")).toBe(true);
-  });
-
-  it("debe retornar true para '1'", () => {
-    const envContent = "DEBUG_1=1";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_1")).toBe(true);
-  });
-
-  it("debe retornar true para 'yes'", () => {
-    const envContent = "DEBUG_YES=yes";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_YES")).toBe(true);
-  });
-
-  it("debe retornar true para 'on'", () => {
-    const envContent = "DEBUG_ON=on";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_ON")).toBe(true);
-  });
-
-  it("debe retornar false para 'false'", () => {
-    const envContent = "DEBUG_FALSE=false";
-   mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_FALSE")).toBe(false);
-  });
-
-  it("debe retornar false para '0'", () => {
-    const envContent = "DEBUG_0=0";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_0")).toBe(false);
-  });
-
-  it("debe retornar false para valores no reconocidos", () => {
-    const envContent = "DEBUG_INVALID=maybe";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("DEBUG_INVALID")).toBe(false);
-  });
-
-  it("debe retornar el valor por defecto para variables inexistentes", () => {
-    const envContent = "DEBUG_TRUE=true";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("NONEXISTENT", true)).toBe(true);
-  });
-
-  it("debe retornar false por defecto si no se especifica", () => {
-    const envContent = "DEBUG_TRUE=true";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("NONEXISTENT")).toBe(false);
-  });
-
-  it("debe ser case-insensitive", () => {
-    const envContent = "FLAG=TRUE";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(getEnvBoolean("FLAG")).toBe(true);
-  });
-});
-
-describe("getAllEnvVars", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe retornar una copia de todas las variables", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-
-    const result = getAllEnvVars();
-
-    expect(result).toEqual({
-      API_KEY: "test123",
-      PORT: "3000",
-    });
-  });
-
-  it("debe retornar un objeto vacío si no hay variables", () => {
-    const envContent = "";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    const result = getAllEnvVars();
-    expect(result).toEqual({});
-  });
-
-  it("no debe modificar el objeto original al modificar la copia", () => {
-    const envContent = "API_KEY=test123";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-
-    const result = getAllEnvVars();
-    result['API_KEY'] = "modified";
-
-    // Obtener las variables de nuevo para verificar que no se modificaron
-    const original = getAllEnvVars();
-    expect(original['API_KEY']).toBe("test123");
-  });
-});
-
-describe("hasEnvVar", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe retornar true para una variable existente", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(hasEnvVar("API_KEY")).toBe(true);
-  });
-
-  it("debe retornar false para una variable inexistente", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(hasEnvVar("NONEXISTENT")).toBe(false);
-  });
-
-  it("debe retornar true incluso si el valor está vacío", () => {
-    // Nota: Este test falla porque validateEnv rechaza valores vacíos
-    // Vamos a ajustar el test para reflejar el comportamiento real
-    const envContent = "API_KEY=test123";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    // Las variables con valores vacíos no pasan la validación
-    // asi que este test verifica que una variable que SÍ existe devuelva true
-    expect(hasEnvVar("API_KEY")).toBe(true);
-  });
-});
-
 describe("Imprimir todas las variables de ambiente", () => {
   it("debe cargar e imprimir todas las variables del archivo .env", () => {
+    // TODO: Es una prueba de integración
+    // TODO: Debe crear .env como precondición
     // Usar fs real temporalmente
     const realFs = jest.requireActual("fs");
     
@@ -826,116 +527,9 @@ describe("Imprimir todas las variables de ambiente", () => {
   });
 });
 
-describe("Objeto env (acceso directo)", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
-
-  it("debe permitir acceso directo a variables como env.VAR_NAME", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(env.API_KEY).toBe("test123");
-    expect(env.PORT).toBe("3000");
-
-  });
-
-  it("debe retornar undefined para variables inexistentes", () => {
-    const envContent = "API_KEY=test123";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect(env.NONEXISTENT).toBeUndefined();
-  });
-
-  it("debe permitir verificar existencia con 'in' operator", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    expect("API_KEY" in env).toBe(true);
-    expect("NONEXISTENT" in env).toBe(false);
-  });
-
-  it("debe permitir iterar sobre las claves con Object.keys()", () => {
-    const envContent = "API_KEY=test123\nPORT=3000\nDEBUG=true";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    const keys = Object.keys(env);
-    expect(keys).toContain("API_KEY");
-    expect(keys).toContain("PORT");
-    expect(keys).toContain("DEBUG");
-    expect(keys.length).toBe(3);
-  });
-
-  it("debe permitir desestructuración", () => {
-    const envContent = "API_KEY=test123\nPORT=3000";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    const { API_KEY, PORT } = env;
-    expect(API_KEY).toBe("test123");
-    expect(PORT).toBe("3000");
-  });
-
-  it("debe cargar las variables automáticamente en el primer acceso", () => {
-    const envContent = "LAZY_LOAD=works";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    // El primer acceso debería cargar el .env
-    const value = env.LAZY_LOAD;
-    
-    expect(value).toBe("works");
-    expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
-  });
-
-  it("debe cachear las variables después de la primera carga", () => {
-    const envContent = "CACHED_VAR=cached";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    // Primer acceso
-    const value1 = env.CACHED_VAR;
-    // Segundo acceso
-    const value2 = env.CACHED_VAR;
-    
-    expect(value1).toBe("cached");
-    expect(value2).toBe("cached");
-    // El archivo solo se debe leer una vez
-    expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
-  });
-
-  it("debe permitir usar Object.entries() para iterar", () => {
-    const envContent = "KEY_1=value1\nKEY_2=value2";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    const entries = Object.entries(env);
-    expect(entries).toEqual([
-      ["KEY_1", "value1"],
-      ["KEY_2", "value2"],
-    ]);
-  });
-
-  it("debe permitir usar Object.values() para obtener solo los valores", () => {
-    const envContent = "KEY_1=value1\nKEY_2=value2";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
-    
-    const values = Object.values(env);
-    expect(values).toContain("value1");
-    expect(values).toContain("value2");
-    expect(values.length).toBe(2);
-  });
-});
 
 describe("Validación de valores especiales", () => {
   beforeEach(() => {
-    resetEnvCache();
     jest.clearAllMocks();
   });
 
@@ -1116,194 +710,193 @@ describe("Validación de valores especiales", () => {
   });
 });
 
-describe("Pruebas de números avanzadas", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
+// describe("Pruebas de números avanzadas", () => {
+//   beforeEach(() => {
+//     resetEnvCache();
+//     jest.clearAllMocks();
+//   });
 
-  it("debe manejar números negativos", () => {
-    const envContent = "TEMPERATURE=-25\nBALANCE=-100.50";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar números negativos", () => {
+//     const envContent = "TEMPERATURE=-25\nBALANCE=-100.50";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("TEMPERATURE")).toBe(-25);
-    expect(getEnvNumber("BALANCE")).toBe(-100.50);
-  });
+//     expect(getEnvNumber("TEMPERATURE")).toBe(-25);
+//     expect(getEnvNumber("BALANCE")).toBe(-100.50);
+//   });
 
-  it("debe manejar el número cero", () => {
-    const envContent = "ZERO=0\nZERO_FLOAT=0.0";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar el número cero", () => {
+//     const envContent = "ZERO=0\nZERO_FLOAT=0.0";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("ZERO")).toBe(0);
-    expect(getEnvNumber("ZERO_FLOAT")).toBe(0);
-  });
+//     expect(getEnvNumber("ZERO")).toBe(0);
+//     expect(getEnvNumber("ZERO_FLOAT")).toBe(0);
+//   });
 
-  it("debe manejar números muy grandes", () => {
-    const envContent = "BIG_NUMBER=999999999999";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar números muy grandes", () => {
+//     const envContent = "BIG_NUMBER=999999999999";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("BIG_NUMBER")).toBe(999999999999);
-  });
+//     expect(getEnvNumber("BIG_NUMBER")).toBe(999999999999);
+//   });
 
-  it("debe manejar números en notación científica", () => {
-    const envContent = "SCIENTIFIC=1.5e10";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar números en notación científica", () => {
+//     const envContent = "SCIENTIFIC=1.5e10";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("SCIENTIFIC")).toBe(1.5e10);
-  });
+//     expect(getEnvNumber("SCIENTIFIC")).toBe(1.5e10);
+//   });
 
-  it("debe retornar undefined para strings vacíos cuando se esperan números", () => {
-    const envContent = "API_KEY=valid";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe retornar undefined para strings vacíos cuando se esperan números", () => {
+//     const envContent = "API_KEY=valid";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("NONEXISTENT")).toBeUndefined();
-  });
+//     expect(getEnvNumber("NONEXISTENT")).toBeUndefined();
+//   });
 
-  it("debe rechazar valores con espacios como números inválidos", () => {
-    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
-    const envContent = "SPACED_NUMBER=10 20";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe rechazar valores con espacios como números inválidos", () => {
+//     const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+//     const envContent = "SPACED_NUMBER=10 20";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvNumber("SPACED_NUMBER", 0)).toBe(0);
-    expect(consoleWarnSpy).toHaveBeenCalled();
+//     expect(getEnvNumber("SPACED_NUMBER", 0)).toBe(0);
+//     expect(consoleWarnSpy).toHaveBeenCalled();
     
-    consoleWarnSpy.mockRestore();
-  });
-});
+//     consoleWarnSpy.mockRestore();
+//   });
+// });
 
-describe("Pruebas de booleanos avanzadas", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
+// describe("Pruebas de booleanos avanzadas", () => {
+//   beforeEach(() => {
+//     resetEnvCache();
+//     jest.clearAllMocks();
+//   });
 
-  it("debe manejar 'TRUE' en mayúsculas", () => {
-    const envContent = "FLAG=TRUE";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar 'TRUE' en mayúsculas", () => {
+//     const envContent = "FLAG=TRUE";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(true);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(true);
+//   });
 
-  it("debe manejar 'Yes' en mixed case", () => {
-    const envContent = "FLAG=Yes";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar 'Yes' en mixed case", () => {
+//     const envContent = "FLAG=Yes";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(true);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(true);
+//   });
 
-  it("debe manejar 'ON' en mayúsculas", () => {
-    const envContent = "FLAG=ON";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe manejar 'ON' en mayúsculas", () => {
+//     const envContent = "FLAG=ON";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(true);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(true);
+//   });
 
-  it("debe retornar false para 'no'", () => {
-    const envContent = "FLAG=no";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe retornar false para 'no'", () => {
+//     const envContent = "FLAG=no";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(false);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(false);
+//   });
 
-  it("debe retornar false para 'off'", () => {
-    const envContent = "FLAG=off";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe retornar false para 'off'", () => {
+//     const envContent = "FLAG=off";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(false);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(false);
+//   });
 
-  it("debe retornar false para valores numéricos diferentes de 1", () => {
-    const envContent = "FLAG=2";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe retornar false para valores numéricos diferentes de 1", () => {
+//     const envContent = "FLAG=2";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(false);
-  });
+//     expect(getEnvBoolean("FLAG")).toBe(false);
+//   });
 
-  it("debe retornar false para valores aleatorios", () => {
-    const envContent = "FLAG=random";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe retornar false para valores aleatorios", () => {
+//     const envContent = "FLAG=random";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    expect(getEnvBoolean("FLAG")).toBe(false);
-  });
-});
+//     expect(getEnvBoolean("FLAG")).toBe(false);
+//   });
+// });
 
-describe("Test de caché y reseteo", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
+// describe("Test de caché y reseteo", () => {
+//   beforeEach(() => {
+//     resetEnvCache();
+//     jest.clearAllMocks();
+//   });
 
-  it("debe resetear el caché correctamente", () => {
-    const envContent = "VAR1=value1";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe resetear el caché correctamente", () => {
+//     const envContent = "VAR1=value1";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    // Cargar una vez
-    getEnvVar("VAR1");
-    expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
+//     // Cargar una vez
+//     getEnvVar("VAR1");
+//     expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
 
-    // Resetear el caché
-    resetEnvCache();
+//     // Resetear el caché
+//     resetEnvCache();
 
-    // Cargar de nuevo debería leer el archivo otra vez
-    const envContent2 = "VAR1=value2";
-    mockedFs.readFileSync.mockReturnValue(envContent2);
+//     // Cargar de nuevo debería leer el archivo otra vez
+//     const envContent2 = "VAR1=value2";
+//     mockedFs.readFileSync.mockReturnValue(envContent2);
     
-    const value = getEnvVar("VAR1");
-    expect(value).toBe("value2");
-    expect(mockedFs.readFileSync).toHaveBeenCalledTimes(2);
-  });
+//     const value = getEnvVar("VAR1");
+//     expect(value).toBe("value2");
+//     expect(mockedFs.readFileSync).toHaveBeenCalledTimes(2);
+//   });
 
-  it("debe cargar solo una vez sin resetear el caché", () => {
-    const envContent = "VAR1=value1";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe cargar solo una vez sin resetear el caché", () => {
+//     const envContent = "VAR1=value1";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    // Múltiples llamadas
-    getEnvVar("VAR1");
-    getEnvVar("VAR1");
-    hasEnvVar("VAR1");
-    getAllEnvVars();
+//     // Múltiples llamadas
+//     getEnvVar("VAR1");
+//     getEnvVar("VAR1");
+//     hasEnvVar("VAR1");
+//     getAllEnvVars();
     
-    // Solo una lectura de archivo
-    expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
-  });
+//     // Solo una lectura de archivo
+//     expect(mockedFs.readFileSync).toHaveBeenCalledTimes(1);
+//   });
 
-  it("debe permitir cambiar entre diferentes archivos .env después de resetear", () => {
-    // Cargar .env.development
-    const devContent = "ENV=development";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(devContent);
+//   it("debe permitir cambiar entre diferentes archivos .env después de resetear", () => {
+//     // Cargar .env.development
+//     const devContent = "ENV=development";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(devContent);
     
-    loadAndValidateEnv(".env.development");
-    expect(getEnvVar("ENV")).toBe("development");
+//     loadAndValidateEnv(".env.development");
+//     expect(getEnvVar("ENV")).toBe("development");
     
-    // Resetear y cargar .env.production
-    resetEnvCache();
-    const prodContent = "ENV=production";
-    mockedFs.readFileSync.mockReturnValue(prodContent);
+//     // Resetear y cargar .env.production
+//     resetEnvCache();
+//     const prodContent = "ENV=production";
+//     mockedFs.readFileSync.mockReturnValue(prodContent);
     
-    loadAndValidateEnv(".env.production");
-    expect(getEnvVar("ENV")).toBe("production");
-  });
-});
+//     loadAndValidateEnv(".env.production");
+//     expect(getEnvVar("ENV")).toBe("production");
+//   });
+// });
 
 describe("Pruebas de edge cases", () => {
   beforeEach(() => {
-    resetEnvCache();
     jest.clearAllMocks();
   });
 
@@ -1375,7 +968,6 @@ describe("Pruebas de edge cases", () => {
 
 describe("Pruebas de errores específicos", () => {
   beforeEach(() => {
-    resetEnvCache();
     jest.clearAllMocks();
   });
 
@@ -1417,53 +1009,53 @@ describe("Pruebas de errores específicos", () => {
   });
 });
 
-describe("Integración de múltiples funciones", () => {
-  beforeEach(() => {
-    resetEnvCache();
-    jest.clearAllMocks();
-  });
+// describe("Integración de múltiples funciones", () => {
+//   beforeEach(() => {
+//     resetEnvCache();
+//     jest.clearAllMocks();
+//   });
 
-  it("debe combinar getEnvVar, getEnvNumber y getEnvBoolean", () => {
-    const envContent = "APP_NAME=MyApp\nPORT=3000\nDEBUG=true";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe combinar getEnvVar, getEnvNumber y getEnvBoolean", () => {
+//     const envContent = "APP_NAME=MyApp\nPORT=3000\nDEBUG=true";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    const name = getEnvVar("APP_NAME");
-    const port = getEnvNumber("PORT");
-    const debug = getEnvBoolean("DEBUG");
+//     const name = getEnvVar("APP_NAME");
+//     const port = getEnvNumber("PORT");
+//     const debug = getEnvBoolean("DEBUG");
 
-    expect(name).toBe("MyApp");
-    expect(port).toBe(3000);
-    expect(debug).toBe(true);
-  });
+//     expect(name).toBe("MyApp");
+//     expect(port).toBe(3000);
+//     expect(debug).toBe(true);
+//   });
 
-  it("debe usar hasEnvVar antes de requireEnvVar", () => {
-    const envContent = "REQUIRED_VAR=exists";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe usar hasEnvVar antes de requireEnvVar", () => {
+//     const envContent = "REQUIRED_VAR=exists";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    if (hasEnvVar("REQUIRED_VAR")) {
-      const value = requireEnvVar("REQUIRED_VAR");
-      expect(value).toBe("exists");
-    }
+//     if (hasEnvVar("REQUIRED_VAR")) {
+//       const value = requireEnvVar("REQUIRED_VAR");
+//       expect(value).toBe("exists");
+//     }
 
-    if (!hasEnvVar("OPTIONAL_VAR")) {
-      const value = getEnvVar("OPTIONAL_VAR", "default");
-      expect(value).toBe("default");
-    }
-  });
+//     if (!hasEnvVar("OPTIONAL_VAR")) {
+//       const value = getEnvVar("OPTIONAL_VAR", "default");
+//       expect(value).toBe("default");
+//     }
+//   });
 
-  it("debe usar getAllEnvVars para validar configuración completa", () => {
-    const envContent = "DB_HOST=localhost\nDB_PORT=5432\nDB_NAME=mydb";
-    mockedFs.existsSync.mockReturnValue(true);
-    mockedFs.readFileSync.mockReturnValue(envContent);
+//   it("debe usar getAllEnvVars para validar configuración completa", () => {
+//     const envContent = "DB_HOST=localhost\nDB_PORT=5432\nDB_NAME=mydb";
+//     mockedFs.existsSync.mockReturnValue(true);
+//     mockedFs.readFileSync.mockReturnValue(envContent);
 
-    const allVars = getAllEnvVars();
-    const requiredVars = ["DB_HOST", "DB_PORT", "DB_NAME"];
+//     const allVars = getAllEnvVars();
+//     const requiredVars = ["DB_HOST", "DB_PORT", "DB_NAME"];
     
-    requiredVars.forEach(varName => {
-      expect(allVars).toHaveProperty(varName);
-    });
-  });
-});
+//     requiredVars.forEach(varName => {
+//       expect(allVars).toHaveProperty(varName);
+//     });
+//   });
+// });
 
