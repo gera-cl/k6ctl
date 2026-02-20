@@ -16,6 +16,7 @@ program
   .option('-c, --config <path>', 'Path to config file', 'k6ctl.config.js')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace')
   .option('-p, --parallelism <number>', 'Number of parallel test pods')
+  .option('-v, --verbose', 'enable debug logging')
   .action(runTest);
 
 program.parse();

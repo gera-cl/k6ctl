@@ -3,6 +3,7 @@ import { existsSync, promises as fs_promises } from "fs";
 import { basename, join, parse } from 'node:path';
 import { promisify } from "util";
 import * as k8s from '@kubernetes/client-node';
+import logger from '../utils/logger';
 
 const execAsync = promisify(exec);
 
@@ -45,16 +46,16 @@ export async function archiveTest(scriptPath: string, outputDirectory?: string):
     const sanitizedScriptName = sanitizeText(scriptName);
     const archiveOutput = join(outputDirectory ?? '.', `archive-${sanitizedScriptName}-${Date.now()}.tar`);
     const archiveCommand = `k6 archive -v -O ${archiveOutput} ${scriptPath}`;
-    console.log(`Archiving script with command: ${archiveCommand}`);
+    logger.debug(`Archiving script with command: ${archiveCommand}`);
     const { stdout, stderr } = await execAsync(archiveCommand);
-    console.log("Standard Output:", stdout);
-    console.log("Standard Error:", stderr);
+    logger.debug(`Standard Output: ${stdout}`);
+    logger.debug(`Standard Error: ${stderr}`);
 
     // Check if the file was created successfully
     if (!existsSync(archiveOutput)) {
       throw new Error(`Failed to create archive: ${stderr}`);
     }
-    console.info(`Archive created successfully at: ${archiveOutput}`);
+    logger.info(`Archive created successfully at: ${archiveOutput}`);
     return {
       archivePath: archiveOutput,
       archiveFilename: basename(archiveOutput),
@@ -98,7 +99,7 @@ export async function createConfigMap(archiveResult: ArchiveResult, namespace: s
   };
 
   await k8sApi.createNamespacedConfigMap({ namespace, body: configMap });
-  console.info(`ConfigMap ${configMapName} created in namespace ${namespace}`);
+  logger.info(`ConfigMap ${configMapName} created in namespace ${namespace}`);
   return {
     namespace,
     configMapName: configMapName,
@@ -115,7 +116,7 @@ export async function deleteConfigMap(configMapName: string, namespace: string):
 
   try {
     await k8sApi.deleteNamespacedConfigMap({ name: configMapName, namespace });
-    console.info(`ConfigMap ${configMapName} deleted from namespace ${namespace}`);
+    logger.info(`ConfigMap ${configMapName} deleted from namespace ${namespace}`);
   } catch (error) {
     const errorMessage = (error as Error).message ?? 'Unknown error';
     throw new Error(`Failed to delete ConfigMap ${configMapName} from namespace ${namespace}: ${errorMessage}`);

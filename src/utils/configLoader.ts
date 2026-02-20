@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { readFileSync, existsSync } from "node:fs";
+import logger from './logger';
 
 const BASE_IMAGE = "grafana/k6:latest";
 const DEFAULT_NAMESPACE = "default";
@@ -47,7 +48,7 @@ export type K6ConfigParsed = z.infer<typeof K6ConfigSchema>;
 
 export function loadK6Config(path = DEFAULT_CONFIG_PATH): K6ConfigParsed {
     if (!existsSync(path)) {
-        console.warn(`Config file '${path}' doesn't exist, using default values.`);
+        logger.warn(`Config file '${path}' doesn't exist, using default values.`);
         return K6ConfigSchema.parse({});
     }
     const raw = readFileSync(path, "utf-8");
@@ -57,6 +58,6 @@ export function loadK6Config(path = DEFAULT_CONFIG_PATH): K6ConfigParsed {
     } catch (e) {
         throw new Error(`Config file '${path}' exists but is not valid JSON: ${(e as Error).message}`);
     }
-    console.info(`Loaded config from '${path}'`);
+    logger.info(`Loaded config from '${path}'`);
     return K6ConfigSchema.parse(obj);
 }
