@@ -496,39 +496,6 @@ describe("loadAndValidateEnv - Pruebas de Rutas", () => {
   });
 });
 
-describe("Imprimir todas las variables de ambiente", () => {
-  it("debe cargar e imprimir todas las variables del archivo .env", () => {
-    // TODO: Es una prueba de integración
-    // TODO: Debe crear .env como precondición
-    // Usar fs real temporalmente
-    const realFs: any = jest.requireActual("fs");
-    
-    mockedFs.existsSync.mockImplementation(realFs.existsSync);
-    mockedFs.readFileSync.mockImplementation(realFs.readFileSync);
-
-    const env = loadAndValidateEnv(".env");
-    
-    console.log("\n========================================");
-    console.log("📋 Variables de ambiente cargadas:");
-    console.log("========================================");
-    
-    // Imprimir todas las variables
-    Object.entries(env).forEach(([key, value]) => {
-      console.log(`${key} = ${value}`);
-    });
-    
-    console.log("========================================");
-    console.log(`Total: ${Object.keys(env).length} variables\n`);
-    
-    // También imprimir en formato tabla
-    console.table(env);
-    
-    // Verificar que se cargó al menos una variable
-    expect(Object.keys(env).length).toBeGreaterThan(0);
-  });
-});
-
-
 describe("Validación de valores especiales", () => {
   beforeEach(() => {
     jest.clearAllMocks();
