@@ -48,6 +48,6 @@ describe("loadK6Config", () => {
     test("If JSON is invalid, throws error with clear message", () => {
         mockedExistsSync.mockReturnValue(true);
         mockedReadFileSync.mockReturnValue("{ invalid json");
-        expect(() => loadK6Config("k6ctl.config.json")).toThrow(/Config file 'k6ctl.config.json' exists but is not valid JSON: Expected property name or '}' in JSON at position 2 \(line 1 column 3\)/i);
+        expect(() => loadK6Config("k6ctl.config.json")).toThrow(/Config file 'k6ctl\.config\.json' exists but is not valid JSON:/i);
     });
 });

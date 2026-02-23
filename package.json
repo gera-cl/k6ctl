@@ -9,9 +9,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build",
-    "test:unit": "jest -c test/unit/jest.config.unit.js",
-    "test:integration": "jest -c test/integration/jest.config.integration.js"
+    "test:unit": "jest -c test/jest.config.unit.js",
+    "test:integration": "jest -c test/jest.config.integration.js"
   },
   "keywords": [
     "k6",
