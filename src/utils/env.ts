@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { parse } from "dotenv";
+import logger from './logger';
 
 /**
  * Configura tus patrones de validación aquí
@@ -36,6 +37,8 @@ export function loadAndValidateEnv(
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`Archivo .env no encontrado: ${absolutePath}`);
   }
+
+  logger.debug(`Loading .env file from: ${absolutePath}`);
 
   // Leer el archivo .env
   let fileContent: string;
@@ -81,6 +84,7 @@ export function loadAndValidateEnv(
       "Errores en variables de ambiente:\n" + errors.map(e => `- ${e}`).join("\n")
     );
   }
-  
+
+  logger.info(`Loaded ${Object.keys(result).length} environment variable(s) from '${absolutePath}'`);
   return result;
 }
