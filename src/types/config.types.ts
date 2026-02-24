@@ -1,7 +1,7 @@
 export interface K6Config {
   namespace?: string;
   parallelism?: number;
-  arguments?: string[];
+  arguments?: string[] | undefined;
   cleanup?: boolean;
   quiet?: boolean;
   separate?: boolean;

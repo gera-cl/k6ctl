@@ -8,8 +8,8 @@ export interface TestRunManifest {
   spec: {
     parallelism?: number;
     arguments?: string;
-    quiet?: boolean;
-    cleanup?: boolean;
+    quiet?: string;
+    cleanup?: string;
     separate?: boolean;
     runner?: {
       image?: string;
