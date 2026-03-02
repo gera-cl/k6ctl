@@ -19,7 +19,7 @@ describe("loadK6Config", () => {
         mockedExistsSync.mockReturnValue(false);
         const cfg = loadK6Config("k6ctl.config.json");
         expect(cfg.namespace).toBe("default");
-        expect(cfg.cleanup).toBe(true);
+        expect(cfg.cleanup).toBe(false);
         expect(cfg.quiet).toBe(true);
         expect(cfg.separate).toBe(false);
         expect(cfg.parallelism).toBe(1);
@@ -39,7 +39,7 @@ describe("loadK6Config", () => {
         const cfg = loadK6Config("k6ctl.config.json");
         expect(cfg.namespace).toBe("performance");
         expect(cfg.parallelism).toBe(40);
-        expect(cfg.cleanup).toBe(true);
+        expect(cfg.cleanup).toBe(false);
         expect(cfg.runner.image).toBe("grafana/k6:latest");
         expect(cfg.prometheus?.serverUrl).toBe("http://prom-rw:9090");
         expect(cfg.prometheus?.trendStats).toEqual(["avg", "p(95)", "p(99)", "min", "max"]);

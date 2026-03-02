@@ -71,6 +71,10 @@ describe('KubernetesService', () => {
     createNamespacedConfigMap: jest.Mock;
     deleteNamespacedConfigMap: jest.Mock;
   };
+  let mockCustomObjectsApi: {
+    createNamespacedCustomObject: jest.Mock;
+    deleteNamespacedCustomObject: jest.Mock;
+  };
 
   const archiveFile: ArchivedFile = {
     archivePath: '/tmp/archive-script.tar',
@@ -84,8 +88,12 @@ describe('KubernetesService', () => {
       createNamespacedConfigMap: jest.fn(),
       deleteNamespacedConfigMap: jest.fn(),
     };
+    mockCustomObjectsApi = {
+      createNamespacedCustomObject: jest.fn(),
+      deleteNamespacedCustomObject: jest.fn(),
+    };
 
-    service = new KubernetesService(mockCoreV1Api as unknown as k8s.CoreV1Api);
+    service = new KubernetesService(mockCoreV1Api as unknown as k8s.CoreV1Api, mockCustomObjectsApi as unknown as k8s.CustomObjectsApi);
   });
 
   describe('createConfigMap', () => {

@@ -10,6 +10,7 @@ import logger from '../../src/utils/logger';
 import { TestRunManifest } from '../../src/types/testRunManifest.types';
 import { K6Config } from '../../src/types/config.types';
 import { loadK6Config } from '../../src/utils/configLoader';
+import { buildTestRunManifest } from '../../src/utils/testRunManifestBuilder';
 
 const samplesPath = resolve(__dirname, '..', 'samples');
 const scriptSample1 = join(samplesPath, 'k6_script_sample_1.js');
@@ -50,14 +51,15 @@ describe('KubernetesService integration tests', () => {
   test('Create TestRun from the ConfigMap previously created', async () => {
     const cfg: K6Config = loadK6Config();
     logger.debug("Loaded K6 Config:", JSON.stringify(cfg, null, 2));
-    const result: TestRunManifest = await kubernetesService.createTestRun(configMapResult, archiveOutput, cfg);
-    expect(result).toBeDefined();
-    logger.info("TestRun result:", JSON.stringify(result));
+    const testRunManifest: TestRunManifest = buildTestRunManifest(configMapResult, archiveOutput, cfg);
+    const response = await kubernetesService.createTestRun(testRunManifest);
+    expect(response).toBeDefined();
+    logger.info("TestRun result:", JSON.stringify(response));
 
     // Wait for some time to allow the TestRun to be created and start running
     await new Promise((resolve) => setTimeout(resolve, 40000));
 
     // Clean up the TestRun after successful creation and execution
-    await kubernetesService.deleteTestRun(configMapResult.configMapName, configMapResult.namespace);
+    await kubernetesService.deleteTestRun(testRunManifest);
   }, 120000);
 });
