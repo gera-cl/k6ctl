@@ -37,7 +37,7 @@ const K6ConfigSchema = z.object({
     arguments: z
         .array(z.string())
         .optional(),
-    cleanup: z.boolean().default(true),
+    cleanup: z.boolean().default(false),
     quiet: z.boolean().default(true),
     separate: z.boolean().default(false),
     runner: RunnerSchema,

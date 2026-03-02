@@ -2,11 +2,11 @@ import { existsSync, promises as fs_promises } from 'fs';
 import { parse } from 'node:path';
 import * as k8s from '@kubernetes/client-node';
 import logger from '../utils/logger';
-
 import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
+import { TestRunManifest } from '../types/testRunManifest.types';
 
 export class KubernetesService {
-  constructor(private readonly k8sApi: k8s.CoreV1Api) {}
+  constructor(private readonly k8sApi: k8s.CoreV1Api, private readonly k8sCustomApi: k8s.CustomObjectsApi) { }
 
   async createConfigMap(archiveFile: ArchivedFile, namespace: string): Promise<ConfigMapResult> {
     // Check if the archive file exists
@@ -49,6 +49,41 @@ export class KubernetesService {
       throw new Error(`Failed to delete ConfigMap ${configMapName} from namespace ${namespace}: ${errorMessage}`);
     }
   }
+
+  async createTestRun(testRunManifest: TestRunManifest): Promise<any> {
+    try {
+      const response = await this.k8sCustomApi.createNamespacedCustomObject({
+        group: testRunManifest.apiVersion.split('/')[0],
+        version: testRunManifest.apiVersion.split('/')[1],
+        namespace: testRunManifest.metadata.namespace,
+        plural: "testruns",
+        body: testRunManifest,
+      });
+      logger.info(`TestRun ${testRunManifest.metadata.name} created in namespace ${testRunManifest.metadata.namespace}`);
+      logger.debug(`Create response: ${JSON.stringify(response)}`);
+      return response;
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to create TestRun ${testRunManifest.metadata.name} in namespace ${testRunManifest.metadata.namespace}: ${errorMessage}`);
+    }
+  }
+
+  async deleteTestRun(testRunManifest: TestRunManifest): Promise<void> {
+    try {
+      const response = await this.k8sCustomApi.deleteNamespacedCustomObject({
+        group: testRunManifest.apiVersion.split('/')[0],
+        version: testRunManifest.apiVersion.split('/')[1],
+        namespace: testRunManifest.metadata.namespace,
+        plural: "testruns",
+        name: testRunManifest.metadata.name,
+      });
+      logger.info(`TestRun ${testRunManifest.metadata.name} deleted from namespace ${testRunManifest.metadata.namespace}`);
+      logger.debug(`Delete response: ${JSON.stringify(response)}`);
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to delete TestRun ${testRunManifest.metadata.name} from namespace ${testRunManifest.metadata.namespace}: ${errorMessage}`);
+    }
+  }
 }
 
 export function createDefaultKubernetesService(context?: string): KubernetesService {
@@ -56,5 +91,6 @@ export function createDefaultKubernetesService(context?: string): KubernetesServ
   kc.loadFromDefault();
   if (context) kc.setCurrentContext(context);
   const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-  return new KubernetesService(k8sApi);
+  const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
+  return new KubernetesService(k8sApi, k8sCustomApi);
 }
