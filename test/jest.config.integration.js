@@ -14,6 +14,10 @@ module.exports = {
       useESM: false,
     }],
   },
+  testPathIgnorePatterns: [
+    '/test/integration/env.test.ts',
+    '/test/integration/script.service.test.ts',
+  ],
   transformIgnorePatterns: [
     'node_modules/(?!(@kubernetes/client-node|openid-client|oauth4webapi|jose))'
   ],

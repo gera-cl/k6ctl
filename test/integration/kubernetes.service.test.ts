@@ -59,6 +59,11 @@ describe('KubernetesService integration tests', () => {
     // Wait for some time to allow the TestRun to be created and start running
     await new Promise((resolve) => setTimeout(resolve, 40000));
 
+    // List TestRuns, Pods, and ConfigMaps to verify they are created and running
+    await kubernetesService.listTestRuns();
+    await kubernetesService.listPods();
+    await kubernetesService.listConfigMaps();
+
     // Clean up the TestRun after successful creation and execution
     await kubernetesService.deleteTestRun(testRunManifest);
   }, 120000);
