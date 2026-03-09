@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Argument, Command } from 'commander';
 import { runTest } from './commands/run';
+import { list } from './commands/list';
 
 const program = new Command();
 
@@ -18,5 +19,12 @@ program
   .option('-p, --parallelism <number>', 'Number of parallel test pods')
   .option('-v, --verbose', 'enable debug logging')
   .action(runTest);
+
+program
+  .command('list')
+  .description('List all resources')
+  .addArgument(new Argument('[type]', 'Resource type').choices(['pods', 'testruns', 'configmaps']).default('all'))
+  .option('-n, --namespace <namespace>', 'Kubernetes namespace', 'default')
+  .action(list);
 
 program.parse();
