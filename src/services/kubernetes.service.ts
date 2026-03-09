@@ -183,6 +183,7 @@ export function printPodsTable(data: k8s.V1PodList): void {
         const r = c.resources || {};
         const req = r.requests || {};
         const lim = r.limits || {};
+        const statusEmoji = status === 'Succeeded' ? '🟢' : status === 'Failed' ? '🔴' : '🟡';
         return [
           podName,
           namespace,
@@ -192,7 +193,7 @@ export function printPodsTable(data: k8s.V1PodList): void {
           fmt(req.memory),
           fmt(lim.cpu),
           fmt(lim.memory),
-          status,
+          `${status} ${statusEmoji}`,
         ];
       });
     }
