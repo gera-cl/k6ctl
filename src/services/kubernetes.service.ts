@@ -6,7 +6,6 @@ import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 import { printTableGeneric } from '../utils/table.util';
 
-
 export class KubernetesService {
   constructor(private readonly k8sApi: k8s.CoreV1Api, private readonly k8sCustomApi: k8s.CustomObjectsApi) { }
 
