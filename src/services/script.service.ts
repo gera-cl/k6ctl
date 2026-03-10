@@ -73,7 +73,7 @@ function sanitizeText(text: string): string {
   sanitized = sanitized.replace(/[^a-z0-9.-]/g, '-');
   sanitized = sanitized.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
   sanitized = sanitized.replace(/[-]+/g, '-');
-  sanitized = sanitized.replace(/[.]+/g, '.');
+  sanitized = sanitized.replace(/[.]+/g, '-');
   sanitized = sanitized.replace(/^[.-]+|[.-]+$/g, '');
   return sanitized;
 }
