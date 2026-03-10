@@ -3,13 +3,14 @@
 import { Argument, Command } from 'commander';
 import { runTest } from './commands/run';
 import { list } from './commands/list';
+import { version } from '../package.json';
 
 const program = new Command();
 
 program
   .name('k6ctl')
   .description('CLI tool to run k6 tests on Kubernetes using k6-operator')
-  .version('0.1.0');
+  .version(version);
 
 program
   .command('run <script>')

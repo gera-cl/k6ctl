@@ -20,17 +20,18 @@ export function buildTestRunManifest(
     cfg: K6Config,
     envFromLoader?: Record<string, string>
 ): TestRunManifest {
+    const testName = configMapResult.configMapName.replace("archive-", "test-");
     const argumentsString = buildArgumentsString(
         cfg.arguments,
         cfg,
-        configMapResult.configMapName
+        testName
     );
     logger.debug("Constructed arguments string for TestRun manifest:", argumentsString);
     const testRun: TestRunManifest = {
         apiVersion: `${K6_GROUP}/${K6_VERSION}`,
         kind: K6_KIND,
         metadata: {
-            name: configMapResult.configMapName,
+            name: testName,
             namespace: configMapResult.namespace,
         },
         spec: {
