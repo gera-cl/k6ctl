@@ -3,6 +3,9 @@
 import { Argument, Command } from 'commander';
 import { runTest } from './commands/run';
 import { list } from './commands/list';
+import { logs } from './commands/logs';
+import { status } from './commands/status';
+import { deleteLastRun } from './commands/delete';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -27,5 +30,25 @@ program
   .addArgument(new Argument('[type]', 'Resource type').choices(['pods', 'testruns', 'configmaps']).default('all'))
   .option('-n, --namespace <namespace>', 'Kubernetes namespace', 'default')
   .action(list);
+
+program
+  .command('logs')
+  .description('Show logs from the last test run pods')
+  .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
+  .option('-c, --container <name>', 'Container name to fetch logs from')
+  .action(logs);
+
+program
+  .command('status')
+  .description('Show status of the last test run')
+  .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
+  .action(status);
+
+program
+  .command('delete')
+  .description('Delete the last test run (TestRun + ConfigMap)')
+  .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
+  .option('--keep-configmap', 'Skip deletion of the associated ConfigMap')
+  .action(deleteLastRun);
 
 program.parse();

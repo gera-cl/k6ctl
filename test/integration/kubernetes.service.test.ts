@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from '@jest/globals';
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
-import { createDefaultKubernetesService } from '../../src/services/kubernetes.service';
+import { createDefaultKubernetesService, printConfigMapsTable } from '../../src/services/kubernetes.service';
 import { ScriptService } from '../../src/services/script.service';
 import { ConfigMapResult } from '../../src/types/kubernetes.types';
 import { ArchiveResult } from '../../src/types/script.types';
@@ -11,6 +11,12 @@ import { TestRunManifest } from '../../src/types/testRunManifest.types';
 import { K6Config } from '../../src/types/config.types';
 import { loadK6Config } from '../../src/utils/configLoader';
 import { buildTestRunManifest } from '../../src/utils/testRunManifestBuilder';
+import { printTestRunsTable, printPodsTable } from '../../src/services/kubernetes.service';
+import { saveLastRun } from '../../src/utils/lastRunStore';
+import { status } from '../../src/commands/status';
+import { logs } from '../../src/commands/logs';
+import { deleteLastRun } from '../../src/commands/delete';
+
 
 const samplesPath = resolve(__dirname, '..', 'samples');
 const scriptSample1 = join(samplesPath, 'k6_script_sample_1.js');
@@ -24,18 +30,6 @@ let archiveOutput: ArchiveResult;
 let configMapResult: ConfigMapResult;
 
 describe('KubernetesService integration tests', () => {
-  afterAll(async () => {
-    // Clean up archived files after tests
-    await Promise.all(
-      archivedFiles.map(file => unlink(file).catch(error => console.error(`Error deleting file ${file}:`, error)))
-    );
-
-    // Clean up created config maps in Kubernetes
-    await Promise.all(
-      configMaps.map(cm => kubernetesService.deleteConfigMap(cm.configMapName, cm.namespace)
-        .catch(error => console.error(`Error deleting config map ${cm.configMapName}:`, error)))
-    );
-  });
 
   test('create config map from archived script', async () => {
     archiveOutput = await scriptService.archiveTest(scriptSample2);
@@ -56,15 +50,26 @@ describe('KubernetesService integration tests', () => {
     expect(response).toBeDefined();
     logger.info("TestRun result:", JSON.stringify(response));
 
-    // Wait for some time to allow the TestRun to be created and start running
-    await new Promise((resolve) => setTimeout(resolve, 40000));
+    // Persist last run state for use by logs/status/delete commands
+    await saveLastRun({
+      testRunName: testRunManifest.metadata.name,
+      namespace: testRunManifest.metadata.namespace,
+      configMapName: configMapResult.configMapName,
+      scriptPath: archiveOutput.archivePath,
+      createdAt: new Date().toISOString(),
+    });
+    logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
 
-    // List TestRuns, Pods, and ConfigMaps to verify they are created and running
-    await kubernetesService.listTestRuns();
-    await kubernetesService.listPods();
-    await kubernetesService.listConfigMaps();
+    // Wait for some time to allow the TestRun to be created and start running
+    await new Promise((resolve) => setTimeout(resolve, 60000));
+
+    // Check status command output
+    await status({ namespace: testRunManifest.metadata.namespace });
+
+    // Check logs command output
+    await logs({ namespace: testRunManifest.metadata.namespace });
 
     // Clean up the TestRun after successful creation and execution
-    await kubernetesService.deleteTestRun(testRunManifest);
+    await deleteLastRun({ namespace: testRunManifest.metadata.namespace });
   }, 120000);
 });
