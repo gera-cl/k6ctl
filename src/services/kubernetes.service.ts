@@ -5,6 +5,7 @@ import logger from '../utils/logger';
 import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 import { printTableGeneric } from '../utils/table.util';
+import { unlink } from 'node:fs/promises';
 
 export class KubernetesService {
   constructor(private readonly k8sApi: k8s.CoreV1Api, private readonly k8sCustomApi: k8s.CustomObjectsApi) { }
@@ -38,6 +39,9 @@ export class KubernetesService {
 
     await this.k8sApi.createNamespacedConfigMap({ namespace, body: configMap });
     logger.info(`ConfigMap ${configMapName} created in namespace ${namespace}`);
+    
+    // Clean up the archive file after creating the ConfigMap
+    await unlink(archiveFile.archivePath).catch(error => console.error(`Error deleting file ${archiveFile.archivePath}:`, error));
     return { namespace, configMapName };
   }
 
@@ -70,20 +74,7 @@ export class KubernetesService {
   }
 
   async deleteTestRun(testRunManifest: TestRunManifest): Promise<void> {
-    try {
-      const response = await this.k8sCustomApi.deleteNamespacedCustomObject({
-        group: testRunManifest.apiVersion.split('/')[0],
-        version: testRunManifest.apiVersion.split('/')[1],
-        namespace: testRunManifest.metadata.namespace,
-        plural: "testruns",
-        name: testRunManifest.metadata.name,
-      });
-      logger.info(`TestRun ${testRunManifest.metadata.name} deleted from namespace ${testRunManifest.metadata.namespace}`);
-      logger.debug(`Delete response: ${JSON.stringify(response)}`);
-    } catch (error) {
-      const errorMessage = (error as Error).message ?? 'Unknown error';
-      throw new Error(`Failed to delete TestRun ${testRunManifest.metadata.name} from namespace ${testRunManifest.metadata.namespace}: ${errorMessage}`);
-    }
+    await this.deleteTestRunByName(testRunManifest.metadata.name, testRunManifest.metadata.namespace);
   }
 
   async listTestRuns(namespace: string = "default"): Promise<any> {
@@ -94,8 +85,6 @@ export class KubernetesService {
         namespace: namespace,
         plural: "testruns",
       });
-      // logger.debug(`List response: ${JSON.stringify(response)}`);
-      printTestRunsTable((response as any).items ?? []);
       return response;
     } catch (error) {
       const errorMessage = (error as Error).message ?? 'Unknown error';
@@ -106,8 +95,6 @@ export class KubernetesService {
   async listPods(namespace: string = "default"): Promise<any> {
     try {
       const response = await this.k8sApi.listNamespacedPod({ namespace });
-      printPodsTable(response);
-      // logger.debug(`List Pods: ${JSON.stringify(response)}`);
       return response;
     } catch (error) {
       const errorMessage = (error as Error).message ?? 'Unknown error';
@@ -118,12 +105,67 @@ export class KubernetesService {
   async listConfigMaps(namespace: string = "default"): Promise<any> {
     try {
       const response = await this.k8sApi.listNamespacedConfigMap({ namespace });
-      printConfigMapsTable(response);
-      // logger.debug(`List ConfigMaps: ${JSON.stringify(response)}`);
       return response;
     } catch (error) {
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to list ConfigMaps in namespace ${namespace}: ${errorMessage}`);
+    }
+  }
+
+  private getTestRunCustomObjectParams(testRunName: string, namespace: string = "default") {
+    return {
+      group: "k6.io",
+      version: "v1alpha1",
+      namespace,
+      plural: "testruns",
+      name: testRunName,
+    };
+  }
+
+  async deleteTestRunByName(testRunName: string, namespace: string = "default"): Promise<void> {
+    try {
+      await this.k8sCustomApi.deleteNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
+      logger.info(`TestRun ${testRunName} deleted from namespace ${namespace}`);
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to delete TestRun ${testRunName} from namespace ${namespace}: ${errorMessage}`);
+    }
+  }
+
+  async getTestRun(testRunName: string, namespace: string = "default"): Promise<any> {
+    try {
+      const response = await this.k8sCustomApi.getNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
+      return response;
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to get TestRun ${testRunName} in namespace ${namespace}: ${errorMessage}`);
+    }
+  }
+
+  async getPodsForTestRun(testRunName: string, namespace: string = "default"): Promise<k8s.V1PodList> {
+    try {
+      const response = await this.k8sApi.listNamespacedPod({
+        namespace,
+        labelSelector: `k6_cr=${testRunName}`,
+      });
+      return response;
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to get pods for TestRun ${testRunName} in namespace ${namespace}: ${errorMessage}`);
+    }
+  }
+
+  async getPodLogs(podName: string, namespace: string = "default", container?: string): Promise<string> {
+    try {
+      const response = await this.k8sApi.readNamespacedPodLog({
+        name: podName,
+        namespace,
+        ...(container ? { container } : {}),
+      });
+      return response;
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to get logs for pod ${podName} in namespace ${namespace}: ${errorMessage}`);
     }
   }
 }

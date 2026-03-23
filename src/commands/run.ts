@@ -4,6 +4,7 @@ import { loadK6Config } from '../utils/configLoader';
 import { loadAndValidateEnv } from '../utils/env';
 import logger, { setLogLevel } from '../utils/logger';
 import { buildTestRunManifest } from '../utils/testRunManifestBuilder';
+import { saveLastRun } from '../utils/lastRunStore';
 
 interface RunOptions {
   config: string;
@@ -45,6 +46,16 @@ export async function runTest(scriptPath: string, options: RunOptions) {
 
     // Create testrun resource
     const testRunResult = await kubernetesService.createTestRun(testRunManifest);
+
+    // Persist last run state for use by logs/status/delete commands
+    await saveLastRun({
+      testRunName: testRunManifest.metadata.name,
+      namespace: testRunManifest.metadata.namespace,
+      configMapName: configMap.configMapName,
+      scriptPath,
+      createdAt: new Date().toISOString(),
+    });
+    logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
 
   } catch (error) {
     logger.error(`Error running test: ${error instanceof Error ? error.message : String(error)}`);

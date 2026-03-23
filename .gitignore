@@ -28,6 +28,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# k6ctl state
+.k6ctl-last-run.json
 *.swo
 *~
 
