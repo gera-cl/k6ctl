@@ -10,6 +10,7 @@ jest.mock('fs', () => ({
   promises: {
     stat: jest.fn(),
     readFile: jest.fn(),
+    unlink: jest.fn(),
   },
 }));
 
@@ -49,6 +50,7 @@ jest.mock('../../src/utils/logger', () => ({
 const mockedExistsSync = existsSync as unknown as jest.Mock;
 const mockedStat = fs_promises.stat as unknown as jest.Mock;
 const mockedReadFile = fs_promises.readFile as unknown as jest.Mock;
+const mockedUnlink = fs_promises.unlink as unknown as jest.MockedFunction<typeof fs_promises.unlink>;
 const mockedLoggerInfo = logger.info as unknown as jest.Mock;
 
 const mockedK8sModule = k8s as unknown as {
@@ -119,6 +121,7 @@ describe('KubernetesService', () => {
     });
 
     test('creates configmap with binaryData and returns namespace/name', async () => {
+      mockedUnlink.mockResolvedValue(undefined);
       mockedExistsSync.mockReturnValue(true);
       mockedStat.mockImplementation(async () => ({ size: 512 }));
       mockedReadFile.mockImplementation(async () => 'YmFzZTY0');

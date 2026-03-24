@@ -5,7 +5,6 @@ import logger from '../utils/logger';
 import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 import { printTableGeneric } from '../utils/table.util';
-import { unlink } from 'node:fs/promises';
 
 export class KubernetesService {
   constructor(private readonly k8sApi: k8s.CoreV1Api, private readonly k8sCustomApi: k8s.CustomObjectsApi) { }
@@ -41,7 +40,7 @@ export class KubernetesService {
     logger.info(`ConfigMap ${configMapName} created in namespace ${namespace}`);
     
     // Clean up the archive file after creating the ConfigMap
-    await unlink(archiveFile.archivePath).catch(error => console.error(`Error deleting file ${archiveFile.archivePath}:`, error));
+    await fs_promises.unlink(archiveFile.archivePath).catch(error => console.error(`Error deleting file ${archiveFile.archivePath}:`, error));
     return { namespace, configMapName };
   }
 

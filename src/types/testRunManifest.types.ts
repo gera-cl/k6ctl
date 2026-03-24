@@ -1,3 +1,5 @@
+import { RunnerEnvVar } from "../utils/testRunManifestBuilder";
+
 export interface TestRunManifest {
   apiVersion: string;
   kind: string;
@@ -13,10 +15,7 @@ export interface TestRunManifest {
     separate?: boolean;
     runner?: {
       image?: string;
-      env?: Array<{
-        name: string;
-        value: string;
-      }>;
+      env?: RunnerEnvVar[];
       resources?: {
         limits: {
           cpu: string

@@ -18,7 +18,7 @@ program
 program
   .command('run <script>')
   .description('Run a k6 test script')
-  .option('-c, --config <path>', 'Path to config file', 'k6ctl.config.js')
+  .option('-c, --config <path>', 'Path to config file', 'k6ctl.config.json')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace')
   .option('-p, --parallelism <number>', 'Number of parallel test pods')
   .option('-v, --verbose', 'enable debug logging')
