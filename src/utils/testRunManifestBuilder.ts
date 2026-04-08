@@ -3,7 +3,9 @@ import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
 import { K6Config } from '../types/config.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 
-type RunnerEnvVar = { name: string; value: string };
+export type RunnerEnvVar =
+    | { name: string; value: string }
+    | { name: string; valueFrom: { secretKeyRef: { name: string; key: string } } };
 const K6_GROUP = "k6.io";
 const K6_VERSION = "v1alpha1";
 const K6_KIND = "TestRun";
@@ -61,24 +63,15 @@ function buildRunnerEnv(
     cfg: K6Config,
     envFromLoader?: Record<string, string>
 ): RunnerEnvVar[] | undefined {
-    const envMap = new Map<string, string>();
+    const envMap = new Map<string, RunnerEnvVar>();
     if (envFromLoader) {
-        for (const [key, value] of Object.entries(envFromLoader)) {
-            if (value !== undefined && value !== null) {
-                envMap.set(key, String(value));
-            }
+        for (const [key, raw] of Object.entries(envFromLoader)) {
+            if (raw === undefined || raw === null) continue;
+            addEnvToMap(key, raw, envMap);
         }
     }
-    if (cfg.prometheus?.serverUrl) {
-        envMap.set(K6_PROMETHEUS_RW_SERVER_URL, cfg.prometheus.serverUrl);
-        if (cfg.prometheus.trendStats?.length) {
-            envMap.set(K6_PROMETHEUS_RW_TREND_STATS, cfg.prometheus.trendStats.join(","));
-        }
-    }
-    const envArray: RunnerEnvVar[] = Array.from(envMap.entries()).map(([name, value]) => ({
-        name,
-        value,
-    }));
+    addPrometheusEnvVars(cfg, envMap);
+    const envArray: RunnerEnvVar[] = Array.from(envMap.values());
     return envArray.length > 0 ? envArray : undefined;
 }
 
@@ -99,4 +92,35 @@ function buildArgumentsString(args: string[] | undefined, cfg: K6Config, name: s
         return undefined;
     }
     return finalArgs.join(" ");
+}
+
+function parseSecretPlaceholder(value: string): { secretName: string; secretKey: string } | null {
+    const m = /^\{\{SECRETS\.([^.}]+)\.([^.}]+)\}\}$/.exec(value.trim());
+    if (!m) return null;
+    return { secretName: m[1], secretKey: m[2] };
+}
+
+function addEnvToMap(key: string, raw: string, envMap: Map<string, RunnerEnvVar>) {
+    const value = String(raw);
+    const secret = parseSecretPlaceholder(value);
+    if (secret) {
+        envMap.set(key, { name: key, valueFrom: { secretKeyRef: { name: secret.secretName, key: secret.secretKey } } });
+    } else {
+        envMap.set(key, { name: key, value });
+    }
+}
+
+function addPrometheusEnvVars(cfg: K6Config, envMap: Map<string, RunnerEnvVar>) {
+    if (cfg.prometheus?.serverUrl) {
+        envMap.set(K6_PROMETHEUS_RW_SERVER_URL, {
+            name: K6_PROMETHEUS_RW_SERVER_URL,
+            value: cfg.prometheus.serverUrl,
+        });
+        if (cfg.prometheus.trendStats?.length) {
+            envMap.set(K6_PROMETHEUS_RW_TREND_STATS, {
+                name: K6_PROMETHEUS_RW_TREND_STATS,
+                value: cfg.prometheus.trendStats.join(","),
+            });
+        }
+    }
 }

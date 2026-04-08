@@ -1,8 +1,7 @@
-import { afterAll, describe, expect, test } from '@jest/globals';
+import { describe, expect, test } from '@jest/globals';
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { unlink } from 'node:fs/promises';
-import { createDefaultKubernetesService, printConfigMapsTable } from '../../src/services/kubernetes.service';
+import { createDefaultKubernetesService } from '../../src/services/kubernetes.service';
 import { ScriptService } from '../../src/services/script.service';
 import { ConfigMapResult } from '../../src/types/kubernetes.types';
 import { ArchiveResult } from '../../src/types/script.types';
@@ -11,7 +10,6 @@ import { TestRunManifest } from '../../src/types/testRunManifest.types';
 import { K6Config } from '../../src/types/config.types';
 import { loadK6Config } from '../../src/utils/configLoader';
 import { buildTestRunManifest } from '../../src/utils/testRunManifestBuilder';
-import { printTestRunsTable, printPodsTable } from '../../src/services/kubernetes.service';
 import { saveLastRun } from '../../src/utils/lastRunStore';
 import { status } from '../../src/commands/status';
 import { logs } from '../../src/commands/logs';
