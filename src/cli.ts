@@ -49,6 +49,9 @@ program
   .description('Delete the last test run (TestRun + ConfigMap)')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
   .option('--keep-configmap', 'Skip deletion of the associated ConfigMap')
+  .option('-p, --pod <name>', 'Delete a specific pod instead of those associated with the last TestRun')
+  .option('-t, --testrun <name>', 'Delete a specific TestRun by name instead of the last one')
+  .option('-c, --configmap <name>', 'Delete a specific ConfigMap by name instead of the one associated with the last TestRun')
   .action(deleteLastRun);
 
 program.parse();
