@@ -43,10 +43,10 @@ export async function deleteLastRun(options: DeleteOptions) {
   await kubernetesService.deleteTestRunByName(lastRun.testRunName, namespace);
 
   if (!options.keepConfigmap) {
-      logger.info(`Deleting ConfigMap: ${lastRun.configMapName} (namespace: ${namespace})`);
-      await kubernetesService.deleteConfigMap(lastRun.configMapName, namespace);
+    logger.info(`Deleting ConfigMap: ${lastRun.configMapName} (namespace: ${namespace})`);
+    await kubernetesService.deleteConfigMap(lastRun.configMapName, namespace);
   }
 
-    await clearLastRun();
-    logger.info('Last run state cleared.');
+  await clearLastRun();
+  logger.info('Last run state cleared.');
 }
