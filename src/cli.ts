@@ -16,12 +16,13 @@ program
   .version(version);
 
 program
-  .command('run <script>')
-  .description('Run a k6 test script')
+  .command('run [script]')
+  .description('Run a k6 test script (omit to select interactively from ${pwd}/dist/tests)')
   .option('-c, --config <path>', 'Path to config file', 'k6ctl.config.json')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace')
   .option('-p, --parallelism <number>', 'Number of parallel test pods')
   .option('-v, --verbose', 'enable debug logging')
+  .option('-d, --dir <path>', 'Folder to search for .js test files', 'dist/tests')
   .action(runTest);
 
 program
