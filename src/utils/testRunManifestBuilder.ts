@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
+import type { ArchivedFile, ConfigMapResult, VolumeClaimResult } from '../types/kubernetes.types';
 import { K6Config } from '../types/config.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 
@@ -123,4 +123,42 @@ function addPrometheusEnvVars(cfg: K6Config, envMap: Map<string, RunnerEnvVar>) 
             });
         }
     }
+}
+
+export function buildTestRunManifestWithVolumeClaim(
+    volumeClaimResult: VolumeClaimResult,
+    cfg: K6Config,
+    envFromLoader?: Record<string, string>
+): TestRunManifest {
+    const testName = volumeClaimResult.volumeClaimName.replace('archive-', 'test-');
+    const argumentsString = buildArgumentsString(cfg.arguments, cfg, testName);
+    logger.debug('Constructed arguments string for TestRun manifest (volume):', argumentsString);
+    const testRun: TestRunManifest = {
+        apiVersion: `${K6_GROUP}/${K6_VERSION}`,
+        kind: K6_KIND,
+        metadata: {
+            name: testName,
+            namespace: volumeClaimResult.namespace,
+        },
+        spec: {
+            parallelism: cfg.parallelism,
+            arguments: argumentsString,
+            quiet: String(cfg.quiet),
+            ...(cfg.cleanup === true ? { cleanup: K6_CLEANUP_LABEL } : {}),
+            separate: cfg.separate,
+            runner: {
+                image: cfg.runner?.image,
+                env: buildRunnerEnv(cfg, envFromLoader),
+                ...(cfg.runner?.resources ? { resources: cfg.runner.resources } : {}),
+            },
+            script: {
+                volumeClaim: {
+                    name: volumeClaimResult.volumeClaimName,
+                    file: volumeClaimResult.archiveFilename,
+                },
+            },
+        },
+    };
+    logger.debug('Constructed TestRun manifest (volume):', JSON.stringify(testRun, null, 2));
+    return testRun;
 }

@@ -6,7 +6,7 @@ import { ScriptService } from '../services/script.service';
 import { loadK6Config } from '../utils/configLoader';
 import { loadAndValidateEnv } from '../utils/env';
 import logger, { setLogLevel } from '../utils/logger';
-import { buildTestRunManifest } from '../utils/testRunManifestBuilder';
+import { buildTestRunManifest, buildTestRunManifestWithVolumeClaim } from '../utils/testRunManifestBuilder';
 import { saveLastRun } from '../utils/lastRunStore';
 
 function listTestFiles(dir: string): string[] {
@@ -81,9 +81,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     const scriptService = new ScriptService();
     const kubernetesService = createDefaultKubernetesService();
 
-    // Load test script
-    const archive = await scriptService.archiveTest(scriptPath);
-
     // Load config
     const config = loadK6Config(options.config);
 
@@ -94,6 +91,28 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     } catch (error) {
       logger.warn("Warning: no environment variables loaded, continuing anyway.");
       logger.debug(`Error loading environment variables: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Load test script
+    const archive = await scriptService.archiveTest(scriptPath);
+
+    if (archive.archiveSize > 1024 * 1024) {
+      // Volume flow
+      logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);
+
+      const volumeClaimResult = await kubernetesService.createPVCWithArchive(archive, config.namespace);
+      const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
+      await kubernetesService.createTestRun(testRunManifest);
+
+      await saveLastRun({
+        testRunName: testRunManifest.metadata.name,
+        namespace: testRunManifest.metadata.namespace,
+        volumeClaimName: volumeClaimResult.volumeClaimName,
+        scriptPath,
+        createdAt: new Date().toISOString(),
+      });
+      logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
+      return;
     }
 
     // Create configmap for test script

@@ -3,18 +3,17 @@ import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createDefaultKubernetesService } from '../../src/services/kubernetes.service';
 import { ScriptService } from '../../src/services/script.service';
-import { ConfigMapResult } from '../../src/types/kubernetes.types';
+import { ConfigMapResult, VolumeClaimResult } from '../../src/types/kubernetes.types';
 import { ArchiveResult } from '../../src/types/script.types';
 import logger from '../../src/utils/logger';
 import { TestRunManifest } from '../../src/types/testRunManifest.types';
 import { K6Config } from '../../src/types/config.types';
 import { loadK6Config } from '../../src/utils/configLoader';
-import { buildTestRunManifest } from '../../src/utils/testRunManifestBuilder';
+import { buildTestRunManifest, buildTestRunManifestWithVolumeClaim } from '../../src/utils/testRunManifestBuilder';
 import { saveLastRun } from '../../src/utils/lastRunStore';
 import { status } from '../../src/commands/status';
 import { logs } from '../../src/commands/logs';
 import { deleteLastRun } from '../../src/commands/delete';
-
 
 const samplesPath = resolve(__dirname, '..', 'samples');
 const scriptSample1 = join(samplesPath, 'k6_script_sample_1.js');
@@ -27,8 +26,11 @@ const kubernetesService = createDefaultKubernetesService();
 let archiveOutput: ArchiveResult;
 let configMapResult: ConfigMapResult;
 
-describe('KubernetesService integration tests', () => {
+let volumeArchiveOutput: ArchiveResult;
+let volumeClaimResult: VolumeClaimResult;
+let volumeTestRunManifest: TestRunManifest;
 
+describe('KubernetesService integration tests', () => {
   test('create config map from archived script', async () => {
     archiveOutput = await scriptService.archiveTest(scriptSample2);
     expect(existsSync(archiveOutput.archivePath)).toBe(true);
@@ -69,5 +71,59 @@ describe('KubernetesService integration tests', () => {
 
     // Clean up the TestRun after successful creation and execution
     await deleteLastRun({ namespace: testRunManifest.metadata.namespace });
+  }, 120000);
+
+  test('archives a script and creates PVC', async () => {
+    volumeArchiveOutput = await scriptService.archiveTest(scriptSample1);
+    expect(existsSync(volumeArchiveOutput.archivePath)).toBe(true);
+
+    volumeClaimResult = await kubernetesService.createPVCWithArchive(volumeArchiveOutput, 'default');
+
+    expect(volumeClaimResult).toBeDefined();
+    expect(volumeClaimResult.volumeClaimName).toMatch(/^archive-/);
+    expect(volumeClaimResult.namespace).toBe('default');
+    expect(volumeClaimResult.archiveFilename).toMatch(/\.tar$/);
+
+    // createPVCWithArchive deletes the local archive file after uploading
+    expect(existsSync(volumeArchiveOutput.archivePath)).toBe(false);
+
+    logger.info(`PVC created: ${JSON.stringify(volumeClaimResult, null, 2)}`);
+  }, 120000);
+
+  test('creates and runs a TestRun from the PVC', async () => {
+    const cfg: K6Config = loadK6Config();
+    logger.debug('Loaded K6 Config:', JSON.stringify(cfg, null, 2));
+
+    volumeTestRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, cfg);
+
+    expect(volumeTestRunManifest.spec.script.volumeClaim).toBeDefined();
+    expect(volumeTestRunManifest.spec.script.configMap).toBeUndefined();
+    expect(volumeTestRunManifest.spec.script.volumeClaim?.name).toBe(volumeClaimResult.volumeClaimName);
+    expect(volumeTestRunManifest.spec.script.volumeClaim?.file).toBe(volumeClaimResult.archiveFilename);
+
+    const response = await kubernetesService.createTestRun(volumeTestRunManifest);
+    expect(response).toBeDefined();
+    logger.info('TestRun result:', JSON.stringify(response));
+
+    await saveLastRun({
+      testRunName: volumeTestRunManifest.metadata.name,
+      namespace: volumeTestRunManifest.metadata.namespace,
+      volumeClaimName: volumeClaimResult.volumeClaimName,
+      scriptPath: volumeArchiveOutput.scriptPath,
+      createdAt: new Date().toISOString(),
+    });
+    logger.info(`Last run saved: ${volumeTestRunManifest.metadata.name} (namespace: ${volumeTestRunManifest.metadata.namespace})`);
+
+    // Wait for the TestRun to be created and start running
+    await new Promise((resolve) => setTimeout(resolve, 60000));
+
+    // Check status command output
+    await status({ namespace: volumeTestRunManifest.metadata.namespace });
+
+    // Check logs command output
+    await logs({ namespace: volumeTestRunManifest.metadata.namespace });
+
+    // Clean up the TestRun and PVC
+    await deleteLastRun({ namespace: volumeTestRunManifest.metadata.namespace });
   }, 120000);
 });

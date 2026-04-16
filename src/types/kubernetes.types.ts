@@ -7,3 +7,9 @@ export interface ConfigMapResult {
   namespace: string;
   configMapName: string;
 }
+
+export interface VolumeClaimResult {
+  namespace: string;
+  volumeClaimName: string;
+  archiveFilename: string;
+}

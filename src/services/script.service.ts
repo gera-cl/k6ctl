@@ -1,5 +1,5 @@
 import { exec } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { basename, join, parse } from 'node:path';
 import { promisify } from 'util';
 import logger from '../utils/logger';
@@ -45,10 +45,12 @@ export class ScriptService {
       if (!existsSync(archiveOutput)) {
         throw new Error(`Failed to create archive: ${stderr}`);
       }
-      logger.info(`Archive created successfully at: ${archiveOutput}`);
+      const archiveSize = statSync(archiveOutput).size;
+      logger.info(`Archive created successfully at: ${archiveOutput} (size: ${archiveSize} bytes)`);
       return {
         archivePath: archiveOutput,
         archiveFilename: basename(archiveOutput),
+        archiveSize,
         scriptPath: scriptPath,
         scriptFilename: basename(scriptPath),
       };
