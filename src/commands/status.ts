@@ -21,6 +21,10 @@ export async function status(options: StatusOptions) {
   const kubernetesService = createDefaultKubernetesService();
 
   const testRun = await kubernetesService.getTestRun(lastRun.testRunName, namespace);
+  if (!testRun) {
+    logger.error(`TestRun ${lastRun.testRunName} not found in namespace ${namespace}. It may have been deleted externally.`);
+    process.exit(1);
+  }
   printTestRunsTable([testRun]);
 
   const podList = await kubernetesService.getPodsForTestRun(lastRun.testRunName, namespace);

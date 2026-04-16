@@ -20,6 +20,12 @@ export class KubernetesService {
     return kc;
   }
 
+  private isNotFoundError(error: unknown): boolean {
+    if ((error as any)?.statusCode === 404) return true;
+    if ((error as Error)?.message?.includes('HTTP-Code: 404')) return true;
+    return false;
+  }
+
   async createConfigMap(archiveFile: ArchivedFile, namespace: string): Promise<ConfigMapResult> {
     // Check if the archive file exists
     if (!existsSync(archiveFile.archivePath)) {
@@ -150,6 +156,10 @@ export class KubernetesService {
       await this.k8sApi.deleteNamespacedPersistentVolumeClaim({ name: volumeClaimName, namespace });
       logger.info(`PVC ${volumeClaimName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`PVC ${volumeClaimName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete PVC ${volumeClaimName} from namespace ${namespace}: ${errorMessage}`);
     }
@@ -160,6 +170,10 @@ export class KubernetesService {
       await this.k8sApi.deleteNamespacedConfigMap({ name: configMapName, namespace });
       logger.info(`ConfigMap ${configMapName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`ConfigMap ${configMapName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete ConfigMap ${configMapName} from namespace ${namespace}: ${errorMessage}`);
     }
@@ -238,6 +252,10 @@ export class KubernetesService {
       await this.k8sCustomApi.deleteNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
       logger.info(`TestRun ${testRunName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`TestRun ${testRunName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete TestRun ${testRunName} from namespace ${namespace}: ${errorMessage}`);
     }
@@ -248,16 +266,23 @@ export class KubernetesService {
       await this.k8sApi.deleteNamespacedPod({ name: podName, namespace });
       logger.info(`Pod ${podName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`Pod ${podName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete Pod ${podName} from namespace ${namespace}: ${errorMessage}`);
     }
   }
 
-  async getTestRun(testRunName: string, namespace: string = "default"): Promise<TestRunManifest> {
+  async getTestRun(testRunName: string, namespace: string = "default"): Promise<TestRunManifest | null> {
     try {
       const response = await this.k8sCustomApi.getNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
       return response as TestRunManifest;
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        return null;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to get TestRun ${testRunName} in namespace ${namespace}: ${errorMessage}`);
     }
