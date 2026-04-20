@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { ScriptService } from '../../src/services/script.service';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import type { ExecFn } from '../../src/types/script.types';
 
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
+  statSync: jest.fn(),
 }));
 
 jest.mock('../../src/utils/logger', () => ({
@@ -13,6 +14,7 @@ jest.mock('../../src/utils/logger', () => ({
 }));
 
 const mockedExistsSync = existsSync as unknown as jest.Mock;
+const mockedStatSync = statSync as unknown as jest.Mock;
 
 describe('ScriptService', () => {
   let mockExec: jest.MockedFunction<ExecFn>;
@@ -22,6 +24,7 @@ describe('ScriptService', () => {
     jest.resetAllMocks();
     mockExec = jest.fn<ExecFn>();
     service = new ScriptService(mockExec);
+    mockedStatSync.mockReturnValue({ size: 1024 });
   });
 
   describe('archiveTest', () => {

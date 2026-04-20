@@ -1,13 +1,30 @@
-import { existsSync, promises as fs_promises } from 'fs';
+import { existsSync, promises as fs_promises, createReadStream } from 'fs';
 import { parse } from 'node:path';
 import * as k8s from '@kubernetes/client-node';
 import logger from '../utils/logger';
-import type { ArchivedFile, ConfigMapResult } from '../types/kubernetes.types';
+import type { ArchivedFile, ConfigMapResult, VolumeClaimResult } from '../types/kubernetes.types';
 import { TestRunManifest } from '../types/testRunManifest.types';
 import { printTableGeneric } from '../utils/table.util';
 
 export class KubernetesService {
-  constructor(private readonly k8sApi: k8s.CoreV1Api, private readonly k8sCustomApi: k8s.CustomObjectsApi) { }
+  constructor(
+    private readonly k8sApi: k8s.CoreV1Api,
+    private readonly k8sCustomApi: k8s.CustomObjectsApi,
+    private readonly kc?: k8s.KubeConfig,
+  ) { }
+
+  private getKubeConfig(): k8s.KubeConfig {
+    if (this.kc) return this.kc;
+    const kc = new k8s.KubeConfig();
+    kc.loadFromDefault();
+    return kc;
+  }
+
+  private isNotFoundError(error: unknown): boolean {
+    if ((error as any)?.statusCode === 404) return true;
+    if ((error as Error)?.message?.includes('HTTP-Code: 404')) return true;
+    return false;
+  }
 
   async createConfigMap(archiveFile: ArchivedFile, namespace: string): Promise<ConfigMapResult> {
     // Check if the archive file exists
@@ -44,11 +61,119 @@ export class KubernetesService {
     return { namespace, configMapName };
   }
 
+  async createPVCWithArchive(archiveFile: ArchivedFile, namespace: string): Promise<VolumeClaimResult> {
+    if (!existsSync(archiveFile.archivePath)) {
+      throw new Error(`Archive file not found at path: ${archiveFile.archivePath}`);
+    }
+
+    const stats = await fs_promises.stat(archiveFile.archivePath);
+    const storageMi = Math.max(10, Math.ceil(stats.size * 2 / (1024 * 1024)));
+    const volumeClaimName = parse(archiveFile.archiveFilename).name;
+
+    // Create PVC
+    const pvc: k8s.V1PersistentVolumeClaim = {
+      apiVersion: 'v1',
+      kind: 'PersistentVolumeClaim',
+      metadata: { name: volumeClaimName, namespace },
+      spec: {
+        accessModes: ['ReadWriteOnce'],
+        resources: { requests: { storage: `${storageMi}Mi` } },
+      },
+    };
+    await this.k8sApi.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
+    logger.info(`PVC ${volumeClaimName} created in namespace ${namespace} (${storageMi}Mi)`);
+
+    // Create helper pod mounting the PVC
+    const helperPodName = `archive-uploader-${Date.now()}`;
+    const helperPod: k8s.V1Pod = {
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: { name: helperPodName, namespace },
+      spec: {
+        restartPolicy: 'Never',
+        containers: [{
+          name: 'helper',
+          image: 'busybox',
+          command: ['sleep', 'infinity'],
+          volumeMounts: [{ name: 'data', mountPath: '/data' }],
+        }],
+        volumes: [{ name: 'data', persistentVolumeClaim: { claimName: volumeClaimName } }],
+      },
+    };
+    await this.k8sApi.createNamespacedPod({ namespace, body: helperPod });
+    logger.info(`Helper pod ${helperPodName} created in namespace ${namespace}`);
+
+    // Wait for pod to reach Running state
+    await this.waitForPodRunning(helperPodName, namespace);
+
+    // Stream archive into pod via exec (like kubectl cp)
+    const exec = new k8s.Exec(this.getKubeConfig());
+    const stdin = createReadStream(archiveFile.archivePath);
+    await new Promise<void>((resolve, reject) => {
+      exec.exec(
+        namespace,
+        helperPodName,
+        'helper',
+        ['tee', `/data/${archiveFile.archiveFilename}`],
+        null,
+        null,
+        stdin,
+        false,
+        (status: k8s.V1Status) => {
+          if (status.status === 'Success') resolve();
+          else reject(new Error(`Failed to upload archive to pod: ${status.message ?? JSON.stringify(status)}`));
+        },
+      ).catch(reject);
+    });
+    logger.info(`Archive ${archiveFile.archiveFilename} uploaded to PVC ${volumeClaimName}`);
+
+    // Delete helper pod
+    await this.k8sApi.deleteNamespacedPod({ name: helperPodName, namespace })
+      .catch(err => logger.debug(`Error deleting helper pod ${helperPodName}: ${(err as Error).message}`));
+    logger.info(`Helper pod ${helperPodName} deleted`);
+
+    // Clean up local archive file
+    await fs_promises.unlink(archiveFile.archivePath)
+      .catch(err => logger.debug(`Error deleting archive file ${archiveFile.archivePath}: ${(err as Error).message}`));
+
+    return { namespace, volumeClaimName, archiveFilename: archiveFile.archiveFilename };
+  }
+
+  private async waitForPodRunning(podName: string, namespace: string, maxWaitMs: number = 60_000): Promise<void> {
+    const pollInterval = 2_000;
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const pod = await this.k8sApi.readNamespacedPod({ name: podName, namespace });
+      if (pod.status?.phase === 'Running') return;
+      if (pod.status?.phase === 'Failed') throw new Error(`Helper pod ${podName} failed to start`);
+      await new Promise(r => setTimeout(r, pollInterval));
+    }
+    throw new Error(`Helper pod ${podName} did not reach Running state within ${maxWaitMs}ms`);
+  }
+
+  async deleteVolumeClaimByName(volumeClaimName: string, namespace: string = "default"): Promise<void> {
+    try {
+      await this.k8sApi.deleteNamespacedPersistentVolumeClaim({ name: volumeClaimName, namespace });
+      logger.info(`PVC ${volumeClaimName} deleted from namespace ${namespace}`);
+    } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`PVC ${volumeClaimName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to delete PVC ${volumeClaimName} from namespace ${namespace}: ${errorMessage}`);
+    }
+  }
+
   async deleteConfigMap(configMapName: string, namespace: string): Promise<void> {
     try {
       await this.k8sApi.deleteNamespacedConfigMap({ name: configMapName, namespace });
       logger.info(`ConfigMap ${configMapName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`ConfigMap ${configMapName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete ConfigMap ${configMapName} from namespace ${namespace}: ${errorMessage}`);
     }
@@ -127,6 +252,10 @@ export class KubernetesService {
       await this.k8sCustomApi.deleteNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
       logger.info(`TestRun ${testRunName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`TestRun ${testRunName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete TestRun ${testRunName} from namespace ${namespace}: ${errorMessage}`);
     }
@@ -137,16 +266,23 @@ export class KubernetesService {
       await this.k8sApi.deleteNamespacedPod({ name: podName, namespace });
       logger.info(`Pod ${podName} deleted from namespace ${namespace}`);
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        logger.warn(`Pod ${podName} not found in namespace ${namespace}, skipping deletion`);
+        return;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to delete Pod ${podName} from namespace ${namespace}: ${errorMessage}`);
     }
   }
 
-  async getTestRun(testRunName: string, namespace: string = "default"): Promise<TestRunManifest> {
+  async getTestRun(testRunName: string, namespace: string = "default"): Promise<TestRunManifest | null> {
     try {
       const response = await this.k8sCustomApi.getNamespacedCustomObject(this.getTestRunCustomObjectParams(testRunName, namespace));
       return response as TestRunManifest;
     } catch (error) {
+      if (this.isNotFoundError(error)) {
+        return null;
+      }
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to get TestRun ${testRunName} in namespace ${namespace}: ${errorMessage}`);
     }
@@ -211,7 +347,7 @@ export function createDefaultKubernetesService(context?: string): KubernetesServ
   if (context) kc.setCurrentContext(context);
   const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
   const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
-  return new KubernetesService(k8sApi, k8sCustomApi);
+  return new KubernetesService(k8sApi, k8sCustomApi, kc);
 }
 
 export function printPodsTable(data: k8s.V1PodList): void {

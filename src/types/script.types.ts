@@ -1,6 +1,7 @@
 export interface ArchiveResult {
   archivePath: string;
   archiveFilename: string;
+  archiveSize: number;
   scriptPath: string;
   scriptFilename: string;
 }

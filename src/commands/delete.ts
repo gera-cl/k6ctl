@@ -4,7 +4,7 @@ import logger from '../utils/logger';
 
 interface DeleteOptions {
   namespace?: string;
-  keepConfigmap?: boolean;
+  keepScript?: boolean;
   pod?: string;
   testrun?: string;
   configmap?: string;
@@ -13,7 +13,7 @@ interface DeleteOptions {
 export async function deleteLastRun(options: DeleteOptions) {
   const kubernetesService = createDefaultKubernetesService();
 
-  const lastRun = !options.namespace ? await loadLastRun() : null;
+  const lastRun = await loadLastRun();
   const namespace = options.namespace ?? lastRun?.namespace ?? 'default';
 
   if (options.pod) {
@@ -42,9 +42,15 @@ export async function deleteLastRun(options: DeleteOptions) {
   logger.info(`Deleting TestRun: ${lastRun.testRunName} (namespace: ${namespace})`);
   await kubernetesService.deleteTestRunByName(lastRun.testRunName, namespace);
 
-  if (!options.keepConfigmap) {
-    logger.info(`Deleting ConfigMap: ${lastRun.configMapName} (namespace: ${namespace})`);
-    await kubernetesService.deleteConfigMap(lastRun.configMapName, namespace);
+  if (!options.keepScript) {
+    if (lastRun.configMapName) {
+      logger.info(`Deleting ConfigMap: ${lastRun.configMapName} (namespace: ${namespace})`);
+      await kubernetesService.deleteConfigMap(lastRun.configMapName, namespace);
+    }
+    if (lastRun.volumeClaimName) {
+      logger.info(`Deleting PVC: ${lastRun.volumeClaimName} (namespace: ${namespace})`);
+      await kubernetesService.deleteVolumeClaimByName(lastRun.volumeClaimName, namespace);
+    }
   }
 
   await clearLastRun();
