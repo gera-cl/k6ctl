@@ -3,10 +3,14 @@ import { ScriptService } from '../../src/services/script.service';
 import { existsSync, statSync } from 'fs';
 import type { ExecFn } from '../../src/types/script.types';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  statSync: jest.fn(),
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual<typeof import('fs')>('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn(),
+    statSync: jest.fn(),
+  };
+});
 
 jest.mock('../../src/utils/logger', () => ({
   __esModule: true,

@@ -136,9 +136,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       logger.debug(`Error loading environment variables: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Load test script
-    archive = await scriptService.archiveTest(scriptPath);
-
     if (archive.archiveSize > 1024 * 1024) {
       // Volume flow
       logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);

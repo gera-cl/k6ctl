@@ -5,6 +5,7 @@ import { dirname, basename, join, parse } from 'node:path';
 import { tmpdir } from 'node:os';
 import { promisify } from 'util';
 import logger from '../utils/logger';
+import * as tar from 'tar';
 
 import type { ArchiveResult, ExecFn, K6InspectResult, K6ScenarioMetrics } from '../types/script.types';
 
@@ -82,8 +83,10 @@ export class ScriptService {
     try {
       await fsPromises.mkdir(extractDir, { recursive: true });
 
-      const extractCommand = `tar -xf ${shellQuote(archive.archivePath)} -C ${shellQuote(extractDir)}`;
-      await this.execCmd(extractCommand);
+      await tar.x({
+        file: archive.archivePath,
+        cwd: extractDir,        
+      });
 
       const metadataPath = join(extractDir, 'metadata.json');
       if (!existsSync(metadataPath)) {
@@ -97,8 +100,10 @@ export class ScriptService {
 
       const outputArchivePath = join(dirname(archive.archivePath), `${parse(archive.archiveFilename).name}.tar`);
 
-      const recompressCommand = `tar -cf ${shellQuote(outputArchivePath)} -C ${shellQuote(extractDir)} metadata.json data file`;
-      await this.execCmd(recompressCommand);
+      await tar.c({
+        file: outputArchivePath,
+        cwd: extractDir,
+      }, ['metadata.json', 'data', 'file']);
 
       if (!existsSync(outputArchivePath)) {
         throw new Error(`Failed to create modified archive at path: ${outputArchivePath}`);
