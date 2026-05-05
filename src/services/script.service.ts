@@ -1,10 +1,13 @@
 import { exec } from 'child_process';
 import { existsSync, statSync } from 'fs';
-import { basename, join, parse } from 'node:path';
+import { promises as fsPromises } from 'node:fs';
+import { dirname, basename, join, parse } from 'node:path';
+import { tmpdir } from 'node:os';
 import { promisify } from 'util';
 import logger from '../utils/logger';
+import * as tar from 'tar';
 
-import type { ArchiveResult, ExecFn } from '../types/script.types';
+import type { ArchiveResult, ExecFn, K6InspectResult, K6ScenarioMetrics } from '../types/script.types';
 
 const defaultExecAsync = promisify(exec);
 
@@ -59,6 +62,69 @@ export class ScriptService {
       throw new Error(`Failed to archive the script: ${errorMessage}`);
     }
   }
+
+  async inspectScript(scriptPath: string): Promise<K6InspectResult> {
+    const { stdout, stderr } = await this.execCmd(`k6 inspect ${scriptPath}`);
+    if (stderr) {
+      logger.error(`Error inspecting script: ${stderr}`);
+      throw new Error(`Failed to inspect the script: ${stderr}`);
+    }
+    return JSON.parse(stdout) as K6InspectResult;
+  }
+
+  async extractModifyAndRecompress(archive: ArchiveResult, scenarioMetrics: K6ScenarioMetrics[]): Promise<ArchiveResult> {
+    if (!existsSync(archive.archivePath)) {
+      throw new Error(`Archive file not found at path: ${archive.archivePath}`);
+    }
+
+    const tempRoot = await fsPromises.mkdtemp(join(tmpdir(), 'k6ctl-archive-'));
+    const extractDir = join(tempRoot, 'extracted');
+
+    try {
+      await fsPromises.mkdir(extractDir, { recursive: true });
+
+      await tar.x({
+        file: archive.archivePath,
+        cwd: extractDir,        
+      });
+
+      const metadataPath = join(extractDir, 'metadata.json');
+      if (!existsSync(metadataPath)) {
+        throw new Error(`metadata.json not found in extracted archive: ${archive.archiveFilename}`);
+      }
+
+      const metadataRaw = await fsPromises.readFile(metadataPath, 'utf8');
+      const metadata = JSON.parse(metadataRaw) as Record<string, unknown>;
+      const updatedMetadata = updateMetadata(metadata, scenarioMetrics);
+      await fsPromises.writeFile(metadataPath, `${JSON.stringify(updatedMetadata, null, 2)}\n`, 'utf8');
+
+      const outputArchivePath = join(dirname(archive.archivePath), `${parse(archive.archiveFilename).name}.tar`);
+
+      await tar.c({
+        file: outputArchivePath,
+        cwd: extractDir,
+      }, ['metadata.json', 'data', 'file']);
+
+      if (!existsSync(outputArchivePath)) {
+        throw new Error(`Failed to create modified archive at path: ${outputArchivePath}`);
+      }
+
+      logger.info(`Archive metadata updated successfully: ${outputArchivePath}`);
+
+      return {
+        archivePath: outputArchivePath,
+        archiveFilename: basename(outputArchivePath),
+        scriptPath: archive.scriptPath,
+        scriptFilename: archive.scriptFilename,
+        archiveSize: statSync(outputArchivePath).size,
+      };
+    } catch (error) {
+      const errorMessage = (error as Error).message ?? 'Unknown error';
+      throw new Error(`Failed to extract, modify, and recompress archive: ${errorMessage}`);
+    } finally {
+      await fsPromises.rm(tempRoot, { recursive: true, force: true });
+    }
+  }
 }
 
 export function createDefaultScriptService(): ScriptService {
@@ -78,4 +144,34 @@ function sanitizeText(text: string): string {
   sanitized = sanitized.replace(/[.]+/g, '-');
   sanitized = sanitized.replace(/^[.-]+|[.-]+$/g, '');
   return sanitized;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function updateMetadata(metadata: Record<string, unknown>, scenarioMetrics: K6ScenarioMetrics[]): Record<string, unknown> {
+  if (isRecord(metadata.options) && isRecord(metadata.options.scenarios)) {
+    applyScenarioMetricsToScenarios(metadata.options.scenarios, scenarioMetrics);
+  }
+  return metadata;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function applyScenarioMetricsToScenarios(
+  scenarios: Record<string, unknown>,
+  scenarioMetrics: K6ScenarioMetrics[]
+) {
+  for (const metric of scenarioMetrics) {
+    const scenario = scenarios[metric.name];
+    if (!isRecord(scenario)) {
+      continue;
+    }
+    const recommendedMaxVUs = Math.ceil(metric.recommendedMaxVUs);
+    scenario.maxVUs = recommendedMaxVUs;
+    scenario.preAllocatedVUs = Math.max(1, Math.ceil(recommendedMaxVUs * 0.7));
+  }
 }

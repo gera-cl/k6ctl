@@ -5,14 +5,19 @@ import logger from '../../src/utils/logger';
 import { KubernetesService, createDefaultKubernetesService } from '../../src/services/kubernetes.service';
 import type { ArchivedFile } from '../../src/types/kubernetes.types';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  promises: {
-    stat: jest.fn(),
-    readFile: jest.fn(),
-    unlink: jest.fn(),
-  },
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual<typeof import('fs')>('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn(),
+    promises: {
+      ...actualFs.promises,
+      stat: jest.fn(),
+      readFile: jest.fn(),
+      unlink: jest.fn(),
+    },
+  };
+});
 
 jest.mock('@kubernetes/client-node', () => {
   const mockApiClient = {

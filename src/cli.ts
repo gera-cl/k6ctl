@@ -23,6 +23,7 @@ program
   .option('-p, --parallelism <number>', 'Number of parallel test pods')
   .option('-v, --verbose', 'enable debug logging')
   .option('-d, --dir <path>', 'Folder to search for .js test files', 'dist/tests')
+  .option('--smart', 'Enable smart scenario analysis')
   .action(runTest);
 
 program
