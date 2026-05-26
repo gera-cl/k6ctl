@@ -65,7 +65,7 @@ export class ScriptService {
 
   async inspectScript(scriptPath: string): Promise<K6InspectResult> {
     const { stdout, stderr } = await this.execCmd(`k6 inspect ${scriptPath}`);
-    if (stderr) {
+    if (stderr && stderr.includes('ERR')) {
       logger.error(`Error inspecting script: ${stderr}`);
       throw new Error(`Failed to inspect the script: ${stderr}`);
     }

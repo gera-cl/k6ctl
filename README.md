@@ -91,6 +91,42 @@ k6ctl run large-test-1.js --smart
 
 `--smart` analyzes supported scenarios (currently `ramping-arrival-rate`) and automatically adjusts values such as recommended VUs and parallelism before submission.
 
+Run using volume (PVC-backed flow):
+
+```bash
+k6ctl run large-test-1.js
+```
+
+`k6ctl` switches to volume flow automatically when the generated k6 archive is larger than 1 MB. In this mode, it creates a PVC, uploads the archive through a temporary helper pod, and mounts that PVC in the TestRun.
+
+There is no explicit `--volume` flag.
+
+Recommended steps for volume flow:
+
+1. Run your test as usual with `k6ctl run <script>`.
+2. Confirm logs mention: `exceeds 1 MB, using volume flow`.
+3. Check created resources:
+
+```bash
+k6ctl status
+kubectl get pvc -n <namespace>
+kubectl get pods -n <namespace>
+```
+
+4. Review pod logs when needed:
+
+```bash
+k6ctl logs -n <namespace>
+```
+
+5. Clean up resources after the run:
+
+```bash
+k6ctl delete
+```
+
+By default, `k6ctl delete` removes both the TestRun and the associated script resource (ConfigMap or PVC). Use `--keep-script` only if you need to preserve the script resource.
+
 Run options:
 
 - `-c, --config <path>`: Path to config file (default: `k6ctl.config.json`)
