@@ -7,6 +7,7 @@ import { logs } from './commands/logs';
 import { status } from './commands/status';
 import { deleteLastRun } from './commands/delete';
 import { version } from '../package.json';
+import logger from './utils/logger';
 
 const program = new Command();
 
@@ -24,6 +25,16 @@ program
   .option('-v, --verbose', 'enable debug logging')
   .option('-d, --dir <path>', 'Folder to search for .js test files', 'dist/tests')
   .option('--smart', 'Enable smart scenario analysis')
+  .option('--default-vus-per-pod <number>', 'Default VUs per pod (requires --smart) (default: 200)')
+  .option('--max-iteration-duration <number>', 'Max iteration duration in seconds (requires --smart) (default: 30)')
+  .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts();
+    if (!opts.smart && (opts.defaultVusPerPod || opts.maxIterationDuration)) {
+      logger.warn("Options '--default-vus-per-pod' and '--max-iteration-duration' require '--smart'");
+      thisCommand.outputHelp();
+      process.exit(1);
+    }
+  })
   .action(runTest);
 
 program

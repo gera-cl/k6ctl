@@ -9,10 +9,9 @@ import logger, { setLogLevel } from '../utils/logger';
 import { buildTestRunManifest, buildTestRunManifestWithVolumeClaim } from '../utils/testRunManifestBuilder';
 import { saveLastRun } from '../utils/lastRunStore';
 import { K6StageMetrics, K6ScenarioOptions, K6ScenarioMetrics, K6InspectResult } from "../types/script.types";
-import { ConfigMapResult } from '../types/kubernetes.types';
 
-const DEFAULT_VUS_PER_POD = process.env.DEFAULT_VUS_PER_POD ? parseInt(process.env.DEFAULT_VUS_PER_POD, 10) : 100;
-const MAX_ITERATION_DURATION_SECONDS = process.env.MAX_ITERATION_DURATION_SECONDS ? parseInt(process.env.MAX_ITERATION_DURATION_SECONDS, 10) : 60;
+const DEFAULT_VUS_PER_POD = 200;
+const MAX_ITERATION_DURATION = 30;
 
 function listTestFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) {
@@ -60,6 +59,8 @@ interface RunOptions {
   verbose?: boolean;
   dir: string;
   smart?: boolean;
+  defaultVusPerPod?: number;
+  maxIterationDuration?: number;
 }
 
 export async function runTest(scriptPath: string, options: RunOptions) {
@@ -97,28 +98,34 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     // Analyze script if smart option is enabled
     if (options.smart) {
       logger.info(`Analyzing script: ${scriptPath}`);
+      if (!options.defaultVusPerPod) {
+        options.defaultVusPerPod = DEFAULT_VUS_PER_POD;
+      }
+      if (!options.maxIterationDuration) {
+        options.maxIterationDuration = MAX_ITERATION_DURATION;
+      }
       const inspectResult = await scriptService.inspectScript(scriptPath);
       const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
       if (scenarioMetrics) {
         const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
         const totalRecommendedMaxVUs = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.recommendedMaxVUs ?? 0), 0);
-        const parallelism = Math.ceil(totalRecommendedMaxVUs / DEFAULT_VUS_PER_POD) || 1;
+        const parallelism = Math.ceil(totalRecommendedMaxVUs / (options.defaultVusPerPod)) || 1;
         const peakTps = scenarioMetrics.reduce((max, metrics) => Math.max(max, metrics?.peakTps ?? 0), 0);
 
         config.parallelism = parallelism;
 
         logger.info(`Total recommendedMaxVUs: ${Math.ceil(totalRecommendedMaxVUs)} 
-        based on scenario analysis and MAX_ITERATION_DURATION_SECONDS=${MAX_ITERATION_DURATION_SECONDS} seconds
+        based on scenario analysis and --max-iteration-duration=${(options.maxIterationDuration)} seconds
         per iteration assumption with a safety factor of 1.2 applied to account for variability in iteration duration and ensure we have enough VUs 
         to meet the target TPS. This is an estimate and actual resource needs may vary based on the specific workload and environment.
         Consider monitoring the test run and adjusting resources as needed.`);
 
-        logger.info(`Calculated parallelism: ${parallelism} (based on DEFAULT_VUS_PER_POD=${DEFAULT_VUS_PER_POD})`);
+        logger.info(`Calculated parallelism: ${parallelism} (based on --default-vus-per-pod=${(options.defaultVusPerPod)})`);
         logger.info(`Peak TPS: ${peakTps.toFixed(2)}`);
         logger.info(`Estimated Total Iterations: ${Math.round(estimatedTotalIterations)}`);
-        logger.info(`Using MAX_ITERATION_DURATION_SECONDS=${MAX_ITERATION_DURATION_SECONDS} seconds`);
+        logger.info(`Using --max-iteration-duration=${(options.maxIterationDuration)} seconds`);
         logger.info(`Using safety factor of 1.2 to calculate recommended VUs.`);
-        logger.info(`Using DEFAULT_VUS_PER_POD=${DEFAULT_VUS_PER_POD} to calculate parallelism.`);
+        logger.info(`Using --default-vus-per-pod=${(options.defaultVusPerPod)} to calculate parallelism.`);
 
         // Extract, modify, and recompress the archive
         archive = await scriptService.extractModifyAndRecompress(archive, scenarioMetrics);
@@ -193,7 +200,7 @@ async function analyzeScript(inspectResult: K6InspectResult): Promise<K6Scenario
 function calculateScenarioMetrics(
   name: string,
   scenario: K6ScenarioOptions,
-  avgIterationDurationSeconds: number = MAX_ITERATION_DURATION_SECONDS,
+  avgIterationDurationSeconds: number = MAX_ITERATION_DURATION,
   safetyFactor: number = 1.2
 ): K6ScenarioMetrics | null {
   if (scenario.executor !== 'ramping-arrival-rate') {
