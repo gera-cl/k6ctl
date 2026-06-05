@@ -25,6 +25,12 @@ export interface TestRunManifest {
           cpu: string
           memory: string
         }
+      },
+      securityContext?: {
+        sysctls?: {
+          name: string;
+          value: string;
+        }[];
       }
     };
     script: {

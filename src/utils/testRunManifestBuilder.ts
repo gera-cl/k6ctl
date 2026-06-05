@@ -46,6 +46,14 @@ export function buildTestRunManifest(
                 image: cfg.runner?.image,
                 env: buildRunnerEnv(cfg, envFromLoader),
                 ...(cfg.runner?.resources ? { resources: cfg.runner.resources } : {}),
+                securityContext: {
+                    sysctls: [
+                        {
+                            name: "net.ipv4.ip_local_port_range",
+                            value: "1024 65535",
+                        },
+                    ],
+                },
             },
             script: {
                 configMap: {
@@ -150,6 +158,14 @@ export function buildTestRunManifestWithVolumeClaim(
                 image: cfg.runner?.image,
                 env: buildRunnerEnv(cfg, envFromLoader),
                 ...(cfg.runner?.resources ? { resources: cfg.runner.resources } : {}),
+                securityContext: {
+                    sysctls: [
+                        {
+                            name: "net.ipv4.ip_local_port_range",
+                            value: "1024 65535",
+                        },
+                    ],
+                },
             },
             script: {
                 volumeClaim: {
