@@ -88,11 +88,20 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     const scriptService = new ScriptService();
     const kubernetesService = createDefaultKubernetesService();
 
-    // Load test script
-    let archive = await scriptService.archiveTest(scriptPath);
-
     // Load config
     const config = loadK6Config(options.config);
+
+    // Load environment variables
+    let envVars;
+    try {
+      envVars = loadAndValidateEnv();
+    } catch (error) {
+      logger.warn("Warning: no environment variables loaded, continuing anyway.");
+      logger.debug(`Error loading environment variables: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Load test script (with environment variables for k6 archive)
+    let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
 
 
     // Analyze script if smart option is enabled
@@ -104,7 +113,7 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       if (!options.maxIterationDuration) {
         options.maxIterationDuration = MAX_ITERATION_DURATION;
       }
-      const inspectResult = await scriptService.inspectScript(scriptPath);
+      const inspectResult = await scriptService.inspectScript(scriptPath, envVars);
       const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
       if (scenarioMetrics) {
         const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
@@ -132,15 +141,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       }
     } else {
       logger.info('Smart scenario analysis is disabled. Running test without previous analysis.');
-    }
-
-    // Load environment variables
-    let envVars;
-    try {
-      envVars = loadAndValidateEnv();
-    } catch (error) {
-      logger.warn("Warning: no environment variables loaded, continuing anyway.");
-      logger.debug(`Error loading environment variables: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (archive.archiveSize > 1024 * 1024) {
