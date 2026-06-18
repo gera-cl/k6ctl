@@ -11,10 +11,19 @@ import type { ArchiveResult, ExecFn, K6InspectResult, K6ScenarioMetrics } from '
 
 const defaultExecAsync = promisify(exec);
 
+/**
+ * Escape a shell value for safe use in a command string.
+ * Wraps the value in single quotes and escapes any single quotes within.
+ * This is necessary because execCmd uses child_process.exec which passes through shell.
+ */
+function escapeShellValue(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 export class ScriptService {
   constructor(private readonly execCmd: ExecFn = defaultExecAsync) { }
 
-  async archiveTest(scriptPath: string, outputDirectory?: string): Promise<ArchiveResult> {
+  async archiveTest(scriptPath: string, outputDirectory?: string, envVars?: Record<string, string>): Promise<ArchiveResult> {
     // Check if the script file exists
     if (!existsSync(scriptPath)) throw new Error(`Script file not found at path: ${scriptPath}`);
 
@@ -38,7 +47,16 @@ export class ScriptService {
       const scriptName = parse(scriptPath).name;
       const sanitizedScriptName = sanitizeText(scriptName);
       const archiveOutput = join(outputDirectory ?? '.', `archive-${sanitizedScriptName}-${Date.now()}.tar`);
-      const archiveCommand = `k6 archive -v -O ${archiveOutput} ${scriptPath}`;
+      
+      // Build environment variable flags
+      let envFlags = '';
+      if (envVars && Object.keys(envVars).length > 0) {
+        envFlags = Object.entries(envVars)
+          .map(([key, value]) => `-e ${key}=${escapeShellValue(value)}`)
+          .join(' ') + ' ';
+      }
+      
+      const archiveCommand = `k6 archive -v -O ${archiveOutput} ${envFlags}${scriptPath}`.trim();
       logger.debug(`Archiving script with command: ${archiveCommand}`);
       const { stdout, stderr } = await this.execCmd(archiveCommand);
       logger.debug(`Standard Output: ${stdout}`);
@@ -63,8 +81,16 @@ export class ScriptService {
     }
   }
 
-  async inspectScript(scriptPath: string): Promise<K6InspectResult> {
-    const { stdout, stderr } = await this.execCmd(`k6 inspect ${scriptPath}`);
+  async inspectScript(scriptPath: string, envVars?: Record<string, string>): Promise<K6InspectResult> {
+    // Build environment variable flags
+    let envFlags = '';
+    if (envVars && Object.keys(envVars).length > 0) {
+      envFlags = Object.entries(envVars)
+        .map(([key, value]) => `-e ${key}=${escapeShellValue(value)}`)
+        .join(' ') + ' ';
+    }
+    
+    const { stdout, stderr } = await this.execCmd(`k6 inspect ${envFlags}${scriptPath}`.trim());
     if (stderr && stderr.includes('ERR')) {
       logger.error(`Error inspecting script: ${stderr}`);
       throw new Error(`Failed to inspect the script: ${stderr}`);
