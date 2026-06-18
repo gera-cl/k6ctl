@@ -55,6 +55,7 @@ program
   .command('status')
   .description('Show status of the last test run')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
+  .option('-v, --verbose', 'Show extra columns (node name, etc.)')
   .action(status);
 
 program

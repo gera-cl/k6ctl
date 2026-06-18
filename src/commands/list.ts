@@ -1,5 +1,6 @@
 import logger, { setLogLevel } from '../utils/logger';
-import { createDefaultKubernetesService, printPodsTable, printTestRunsTable, printConfigMapsTable } from '../services/kubernetes.service';
+import { createDefaultKubernetesService } from '../services/kubernetes.service';
+import { printPodsTable, printTestRunsTable, printConfigMapsTable } from '../utils/kubernetes-printer.util';
 
 export async function list(type: string, options: { namespace?: string }) {
   const kubernetesService = createDefaultKubernetesService();
