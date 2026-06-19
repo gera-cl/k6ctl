@@ -31,6 +31,19 @@ const PrometheusSchema = z
         trendStats: z.array(z.string()).default(PROMETHEUS_DEFAULT_TREND_STATS),
     });
 
+const HookDefinitionSchema = z.object({
+    name: z.string(),
+    command: z.string(),
+    timeout: z.number().positive().default(60),
+    continueOnError: z.boolean().default(false),
+    workingDir: z.string().optional(),
+});
+
+const HooksSchema = z.object({
+    preRun: z.array(HookDefinitionSchema).default([]),
+    postRun: z.array(HookDefinitionSchema).default([]),
+});
+
 const K6ConfigSchema = z.object({
     namespace: z.string().default(DEFAULT_NAMESPACE),
     parallelism: z.number().int().positive().default(1),
@@ -42,6 +55,7 @@ const K6ConfigSchema = z.object({
     separate: z.boolean().default(false),
     runner: RunnerSchema,
     prometheus: PrometheusSchema.optional(),
+    hooks: HooksSchema.default({ preRun: [], postRun: [] }),
 });
 
 export type K6ConfigParsed = z.infer<typeof K6ConfigSchema>;

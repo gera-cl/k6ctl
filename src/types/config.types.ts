@@ -1,3 +1,16 @@
+export interface HookDefinition {
+  name: string;
+  command: string;
+  timeout?: number;
+  continueOnError?: boolean;
+  workingDir?: string;
+}
+
+export interface HooksConfig {
+  preRun?: HookDefinition[];
+  postRun?: HookDefinition[];
+}
+
 export interface K6Config {
   namespace?: string;
   parallelism?: number;
@@ -22,4 +35,5 @@ export interface K6Config {
     serverUrl: string;
     trendStats?: string[];
   }
+  hooks?: HooksConfig;
 }
