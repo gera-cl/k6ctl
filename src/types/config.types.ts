@@ -8,7 +8,6 @@ export interface HookDefinition {
 
 export interface HooksConfig {
   preRun?: HookDefinition[];
-  postRun?: HookDefinition[];
 }
 
 export interface K6Config {

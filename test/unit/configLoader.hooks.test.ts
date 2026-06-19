@@ -20,16 +20,13 @@ describe('loadK6Config – hooks configuration', () => {
     jest.clearAllMocks();
   });
 
-  test('parses config with valid hooks (pre and post)', () => {
+  test('parses config with valid hooks', () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
       JSON.stringify({
         hooks: {
           preRun: [
             { name: 'setup-db', command: 'bash setup.sh', timeout: 30, continueOnError: true, workingDir: '/opt' },
-          ],
-          postRun: [
-            { name: 'cleanup', command: 'bash teardown.sh' },
           ],
         },
       })
@@ -43,10 +40,6 @@ describe('loadK6Config – hooks configuration', () => {
     expect(cfg.hooks.preRun[0].timeout).toBe(30);
     expect(cfg.hooks.preRun[0].continueOnError).toBe(true);
     expect(cfg.hooks.preRun[0].workingDir).toBe('/opt');
-
-    expect(cfg.hooks.postRun).toHaveLength(1);
-    expect(cfg.hooks.postRun[0].name).toBe('cleanup');
-    expect(cfg.hooks.postRun[0].command).toBe('bash teardown.sh');
   });
 
   test('applies defaults (timeout=60, continueOnError=false)', () => {
@@ -110,6 +103,5 @@ describe('loadK6Config – hooks configuration', () => {
     const cfg = loadK6Config('k6ctl.config.json');
 
     expect(cfg.hooks.preRun).toEqual([]);
-    expect(cfg.hooks.postRun).toEqual([]);
   });
 });

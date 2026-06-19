@@ -65,7 +65,6 @@ interface RunOptions {
   maxIterationDuration?: number;
   skipHooks?: boolean;
   skipPreHooks?: boolean;
-  skipPostHooks?: boolean;
 }
 
 export async function runTest(scriptPath: string, options: RunOptions) {
@@ -124,11 +123,7 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       }
     }
 
-    // Track the testRun name for post-run hooks
-    let testRunName: string | undefined;
-
-    try {
-      // Load test script (with environment variables for k6 archive)
+    // Load test script (with environment variables for k6 archive)
       let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
 
 
@@ -179,8 +174,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
         const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
         await kubernetesService.createTestRun(testRunManifest);
 
-        testRunName = testRunManifest.metadata.name;
-
         await saveLastRun({
           testRunName: testRunManifest.metadata.name,
           namespace: testRunManifest.metadata.namespace,
@@ -201,8 +194,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       // Create testrun resource
       const testRunResult = await kubernetesService.createTestRun(testRunManifest);
 
-      testRunName = testRunManifest.metadata.name;
-
       // Persist last run state for use by logs/status/delete commands
       await saveLastRun({
         testRunName: testRunManifest.metadata.name,
@@ -212,20 +203,6 @@ export async function runTest(scriptPath: string, options: RunOptions) {
         createdAt: new Date().toISOString(),
       });
       logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
-    } finally {
-      // === POST-RUN HOOKS ===
-      // Always execute post-run hooks, even if the test run failed
-      if (!options.skipHooks && !options.skipPostHooks && config.hooks.postRun.length > 0) {
-        logger.info('Executing post-run hooks...');
-        hookContext.phase = 'postRun';
-        hookContext.testRunName = testRunName;
-        try {
-          await hooksService.executeHooks(config.hooks.postRun, hookContext);
-        } catch (postHookError) {
-          logger.error(`Post-run hook error: ${postHookError instanceof Error ? postHookError.message : String(postHookError)}`);
-        }
-      }
-    }
 
   } catch (error) {
     logger.error(`Error running test: ${error instanceof Error ? error.message : String(error)}`);

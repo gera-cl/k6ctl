@@ -9,8 +9,7 @@ export interface HookContext {
   scriptPath: string;
   namespace: string;
   parallelism: number;
-  testRunName?: string;
-  phase: 'preRun' | 'postRun';
+  phase: string;
 }
 
 export interface HookResult {
@@ -70,10 +69,6 @@ export class HooksService {
       K6CTL_PARALLELISM: String(context.parallelism),
       K6CTL_HOOK_PHASE: context.phase,
     };
-
-    if (context.testRunName) {
-      env.K6CTL_TESTRUN_NAME = context.testRunName;
-    }
 
     return env;
   }

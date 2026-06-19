@@ -41,7 +41,6 @@ const HookDefinitionSchema = z.object({
 
 const HooksSchema = z.object({
     preRun: z.array(HookDefinitionSchema).default([]),
-    postRun: z.array(HookDefinitionSchema).default([]),
 });
 
 const K6ConfigSchema = z.object({
@@ -55,7 +54,7 @@ const K6ConfigSchema = z.object({
     separate: z.boolean().default(false),
     runner: RunnerSchema,
     prometheus: PrometheusSchema.optional(),
-    hooks: HooksSchema.default({ preRun: [], postRun: [] }),
+    hooks: HooksSchema.default({ preRun: [] }),
 });
 
 export type K6ConfigParsed = z.infer<typeof K6ConfigSchema>;

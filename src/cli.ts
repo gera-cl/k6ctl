@@ -27,9 +27,8 @@ program
   .option('--smart', 'Enable smart scenario analysis')
   .option('--default-vus-per-pod <number>', 'Default VUs per pod (requires --smart) (default: 200)')
   .option('--max-iteration-duration <number>', 'Max iteration duration in seconds (requires --smart) (default: 30)')
-  .option('--skip-hooks', 'Skip all pre and post run hooks')
+  .option('--skip-hooks', 'Skip all pre-run hooks')
   .option('--skip-pre-hooks', 'Skip pre-run hooks only')
-  .option('--skip-post-hooks', 'Skip post-run hooks only')
   .hook('preAction', (thisCommand) => {
     const opts = thisCommand.opts();
     if (!opts.smart && (opts.defaultVusPerPod || opts.maxIterationDuration)) {

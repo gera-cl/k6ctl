@@ -83,25 +83,8 @@ describe('HooksService', () => {
     expect(callOpts.env.K6CTL_NAMESPACE).toBe('perf');
     expect(callOpts.env.K6CTL_PARALLELISM).toBe('4');
     expect(callOpts.env.K6CTL_HOOK_PHASE).toBe('preRun');
-    expect(callOpts.env.K6CTL_TESTRUN_NAME).toBeUndefined();
   });
 
-  test('injects K6CTL_TESTRUN_NAME for postRun', async () => {
-    mockExecSuccess();
-
-    const postRunContext: HookContext = {
-      ...baseContext,
-      phase: 'postRun',
-      testRunName: 'run-abc-123',
-    };
-
-    const hooks: HookDefinition[] = [{ name: 'post-hook', command: 'echo done' }];
-    await service.executeHooks(hooks, postRunContext);
-
-    const callOpts = mockedExec.mock.calls[0][1] as { env: Record<string, string> };
-    expect(callOpts.env.K6CTL_HOOK_PHASE).toBe('postRun');
-    expect(callOpts.env.K6CTL_TESTRUN_NAME).toBe('run-abc-123');
-  });
 
   test('aborts if a hook fails and continueOnError=false', async () => {
     let callCount = 0;
