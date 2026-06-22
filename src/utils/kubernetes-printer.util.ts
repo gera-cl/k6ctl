@@ -62,7 +62,7 @@ export function printPodsTable(data: k8s.V1PodList, opts: { verbose?: boolean } 
     const lim = c?.resources?.limits ?? {};
     const row = [
       opts.verbose ? truncateMiddle(podName, 40) : podName,
-      `${phase} ${statusEmoji}`,
+      `${statusEmoji} ${phase}`,
       `${fmt(req.cpu)}/${fmt(lim.cpu)}`,
       `${fmt(req.memory)}/${fmt(lim.memory)}`,
     ];
@@ -88,7 +88,7 @@ export function printPodsTable(data: k8s.V1PodList, opts: { verbose?: boolean } 
       .sort((a, b) => b[1] - a[1])[0];
     const emoji = phaseEmoji[dominantPhase] ?? '⚪';
     const prefix = podCommonPrefix(runnerPods.map(getName));
-    const statusCell = `${dominantPhase} ${dominantCount}/${total} ${emoji}`;
+    const statusCell = `${emoji} ${dominantPhase} ${dominantCount}/${total}`;
     const rc = runnerPods[0]?.spec?.containers?.[0];
     const rreq = rc?.resources?.requests ?? {};
     const rlim = rc?.resources?.limits ?? {};
