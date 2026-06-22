@@ -35,9 +35,15 @@ jest.mock('@kubernetes/client-node', () => {
     makeApiClient: mockMakeApiClient,
   }));
 
+  // Mock k8s.Log so the KubernetesService constructor can instantiate it.
+  const Log = jest.fn().mockImplementation(() => ({
+    log: jest.fn(),
+  }));
+
   return {
     KubeConfig,
     CoreV1Api: jest.fn(),
+    Log,
     __mocks: {
       mockApiClient,
       mockLoadFromDefault,

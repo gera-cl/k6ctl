@@ -49,6 +49,11 @@ program
   .description('Show logs from the last test run pods')
   .option('-n, --namespace <namespace>', 'Kubernetes namespace (overrides saved value)')
   .option('-c, --container <name>', 'Container name to fetch logs from')
+  .option('-f, --follow', 'Stream logs in real-time')
+  .option('-t, --tail <lines>', 'Number of log lines to show from history (default: 100)', parseInt)
+  .option('-p, --pod <name>', 'Show logs from a specific pod')
+  .option('--type <type>', 'Filter logs by pod type (runner, initializer, starter)')
+  .option('--timestamps', 'Show timestamps in log lines')
   .action(logs);
 
 program

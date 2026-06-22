@@ -7,11 +7,15 @@ import { TestRunManifest } from '../types/testRunManifest.types';
 import { printTableGeneric } from '../utils/table.util';
 
 export class KubernetesService {
+  private readonly k8sLog: k8s.Log;
+
   constructor(
     private readonly k8sApi: k8s.CoreV1Api,
     private readonly k8sCustomApi: k8s.CustomObjectsApi,
     private readonly kc?: k8s.KubeConfig,
-  ) { }
+  ) {
+    this.k8sLog = new k8s.Log(this.getKubeConfig());
+  }
 
   private getKubeConfig(): k8s.KubeConfig {
     if (this.kc) return this.kc;
@@ -301,18 +305,41 @@ export class KubernetesService {
     }
   }
 
-  async getPodLogs(podName: string, namespace: string = "default", container?: string): Promise<string> {
+  async getPodLogs(
+    podName: string,
+    namespace: string = "default",
+    container?: string,
+    tailLines?: number,
+    timestamps?: boolean,
+  ): Promise<string> {
     try {
       const response = await this.k8sApi.readNamespacedPodLog({
         name: podName,
         namespace,
         ...(container ? { container } : {}),
+        ...(tailLines !== undefined ? { tailLines } : {}),
+        ...(timestamps !== undefined ? { timestamps } : {}),
       });
       return response;
     } catch (error) {
       const errorMessage = (error as Error).message ?? 'Unknown error';
       throw new Error(`Failed to get logs for pod ${podName} in namespace ${namespace}: ${errorMessage}`);
     }
+  }
+
+  async streamPodLogs(
+    podName: string,
+    namespace: string,
+    containerName: string | undefined,
+    stream: NodeJS.WritableStream,
+    options: { tailLines?: number; follow?: boolean; timestamps?: boolean; sinceSeconds?: number } = {}
+  ): Promise<any> {
+    return await this.k8sLog.log(namespace, podName, containerName || '', stream as any, {
+      follow: options.follow,
+      tailLines: options.tailLines,
+      timestamps: options.timestamps,
+      sinceSeconds: options.sinceSeconds,
+    });
   }
 }
 
