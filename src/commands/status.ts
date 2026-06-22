@@ -1,10 +1,11 @@
 import { createDefaultKubernetesService } from '../services/kubernetes.service';
-import { printPodsTable, printTestRunsTable } from '../services/kubernetes.service';
+import { printPodsTable, printTestRunsTable } from '../utils/kubernetes-printer.util';
 import { loadLastRun } from '../utils/lastRunStore';
 import logger from '../utils/logger';
 
 interface StatusOptions {
   namespace?: string;
+  verbose?: boolean;
 }
 
 export async function status(options: StatusOptions) {
@@ -28,5 +29,5 @@ export async function status(options: StatusOptions) {
   printTestRunsTable([testRun]);
 
   const podList = await kubernetesService.getPodsForTestRun(lastRun.testRunName, namespace);
-  printPodsTable(podList);
+  printPodsTable(podList, { verbose: options.verbose });
 }
