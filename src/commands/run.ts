@@ -3,12 +3,14 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { createDefaultKubernetesService } from '../services/kubernetes.service';
 import { ScriptService } from '../services/script.service';
+import { HooksService } from '../services/hooks.service';
 import { loadK6Config } from '../utils/configLoader';
 import { loadAndValidateEnv } from '../utils/env';
 import logger, { setLogLevel } from '../utils/logger';
 import { buildTestRunManifest, buildTestRunManifestWithVolumeClaim } from '../utils/testRunManifestBuilder';
 import { saveLastRun } from '../utils/lastRunStore';
 import { K6StageMetrics, K6ScenarioOptions, K6ScenarioMetrics, K6InspectResult } from "../types/script.types";
+import type { HookContext } from '../services/hooks.service';
 
 const DEFAULT_VUS_PER_POD = 200;
 const MAX_ITERATION_DURATION = 30;
@@ -61,6 +63,8 @@ interface RunOptions {
   smart?: boolean;
   defaultVusPerPod?: number;
   maxIterationDuration?: number;
+  skipHooks?: boolean;
+  skipPreHooks?: boolean;
 }
 
 export async function runTest(scriptPath: string, options: RunOptions) {
@@ -87,6 +91,7 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     // Initialize services
     const scriptService = new ScriptService();
     const kubernetesService = createDefaultKubernetesService();
+    const hooksService = new HooksService();
 
     // Load config
     const config = loadK6Config(options.config);
@@ -100,86 +105,104 @@ export async function runTest(scriptPath: string, options: RunOptions) {
       logger.debug(`Error loading environment variables: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Load test script (with environment variables for k6 archive)
-    let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
+    // Build hook context (testRunName will be set after test creation)
+    const hookContext: HookContext = {
+      scriptPath,
+      namespace: config.namespace,
+      parallelism: config.parallelism,
+      phase: 'preRun',
+    };
 
-
-    // Analyze script if smart option is enabled
-    if (options.smart) {
-      logger.info(`Analyzing script: ${scriptPath}`);
-      if (!options.defaultVusPerPod) {
-        options.defaultVusPerPod = DEFAULT_VUS_PER_POD;
+    // === PRE-RUN HOOKS ===
+    if (!options.skipHooks && !options.skipPreHooks && config.hooks.preRun.length > 0) {
+      logger.info('Executing pre-run hooks...');
+      const results = await hooksService.executeHooks(config.hooks.preRun, hookContext);
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        logger.warn(`${failed.length} pre-run hook(s) failed (continueOnError=true)`);
       }
-      if (!options.maxIterationDuration) {
-        options.maxIterationDuration = MAX_ITERATION_DURATION;
-      }
-      const inspectResult = await scriptService.inspectScript(scriptPath, envVars);
-      const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
-      if (scenarioMetrics) {
-        const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
-        const totalRecommendedMaxVUs = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.recommendedMaxVUs ?? 0), 0);
-        const parallelism = Math.ceil(totalRecommendedMaxVUs / (options.defaultVusPerPod)) || 1;
-        const peakTps = scenarioMetrics.reduce((max, metrics) => Math.max(max, metrics?.peakTps ?? 0), 0);
-
-        config.parallelism = parallelism;
-
-        logger.info(`Total recommendedMaxVUs: ${Math.ceil(totalRecommendedMaxVUs)} 
-        based on scenario analysis and --max-iteration-duration=${(options.maxIterationDuration)} seconds
-        per iteration assumption with a safety factor of 1.2 applied to account for variability in iteration duration and ensure we have enough VUs 
-        to meet the target TPS. This is an estimate and actual resource needs may vary based on the specific workload and environment.
-        Consider monitoring the test run and adjusting resources as needed.`);
-
-        logger.info(`Calculated parallelism: ${parallelism} (based on --default-vus-per-pod=${(options.defaultVusPerPod)})`);
-        logger.info(`Peak TPS: ${peakTps.toFixed(2)}`);
-        logger.info(`Estimated Total Iterations: ${Math.round(estimatedTotalIterations)}`);
-        logger.info(`Using --max-iteration-duration=${(options.maxIterationDuration)} seconds`);
-        logger.info(`Using safety factor of 1.2 to calculate recommended VUs.`);
-        logger.info(`Using --default-vus-per-pod=${(options.defaultVusPerPod)} to calculate parallelism.`);
-
-        // Extract, modify, and recompress the archive
-        archive = await scriptService.extractModifyAndRecompress(archive, scenarioMetrics);
-      }
-    } else {
-      logger.info('Smart scenario analysis is disabled. Running test without previous analysis.');
     }
 
-    if (archive.archiveSize > 1024 * 1024) {
-      // Volume flow
-      logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);
+    // Load test script (with environment variables for k6 archive)
+      let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
 
-      const volumeClaimResult = await kubernetesService.createPVCWithArchive(archive, config.namespace);
-      const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
-      await kubernetesService.createTestRun(testRunManifest);
 
+      // Analyze script if smart option is enabled
+      if (options.smart) {
+        logger.info(`Analyzing script: ${scriptPath}`);
+        if (!options.defaultVusPerPod) {
+          options.defaultVusPerPod = DEFAULT_VUS_PER_POD;
+        }
+        if (!options.maxIterationDuration) {
+          options.maxIterationDuration = MAX_ITERATION_DURATION;
+        }
+        const inspectResult = await scriptService.inspectScript(scriptPath, envVars);
+        const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
+        if (scenarioMetrics) {
+          const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
+          const totalRecommendedMaxVUs = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.recommendedMaxVUs ?? 0), 0);
+          const parallelism = Math.ceil(totalRecommendedMaxVUs / (options.defaultVusPerPod)) || 1;
+          const peakTps = scenarioMetrics.reduce((max, metrics) => Math.max(max, metrics?.peakTps ?? 0), 0);
+
+          config.parallelism = parallelism;
+
+          logger.info(`Total recommendedMaxVUs: ${Math.ceil(totalRecommendedMaxVUs)} 
+          based on scenario analysis and --max-iteration-duration=${(options.maxIterationDuration)} seconds
+          per iteration assumption with a safety factor of 1.2 applied to account for variability in iteration duration and ensure we have enough VUs 
+          to meet the target TPS. This is an estimate and actual resource needs may vary based on the specific workload and environment.
+          Consider monitoring the test run and adjusting resources as needed.`);
+
+          logger.info(`Calculated parallelism: ${parallelism} (based on --default-vus-per-pod=${(options.defaultVusPerPod)})`);
+          logger.info(`Peak TPS: ${peakTps.toFixed(2)}`);
+          logger.info(`Estimated Total Iterations: ${Math.round(estimatedTotalIterations)}`);
+          logger.info(`Using --max-iteration-duration=${(options.maxIterationDuration)} seconds`);
+          logger.info(`Using safety factor of 1.2 to calculate recommended VUs.`);
+          logger.info(`Using --default-vus-per-pod=${(options.defaultVusPerPod)} to calculate parallelism.`);
+
+          // Extract, modify, and recompress the archive
+          archive = await scriptService.extractModifyAndRecompress(archive, scenarioMetrics);
+        }
+      } else {
+        logger.info('Smart scenario analysis is disabled. Running test without previous analysis.');
+      }
+
+      if (archive.archiveSize > 1024 * 1024) {
+        // Volume flow
+        logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);
+
+        const volumeClaimResult = await kubernetesService.createPVCWithArchive(archive, config.namespace);
+        const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
+        await kubernetesService.createTestRun(testRunManifest);
+
+        await saveLastRun({
+          testRunName: testRunManifest.metadata.name,
+          namespace: testRunManifest.metadata.namespace,
+          volumeClaimName: volumeClaimResult.volumeClaimName,
+          scriptPath,
+          createdAt: new Date().toISOString(),
+        });
+        logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
+        return;
+      }
+
+      // Create configmap for test script
+      const configMap = await kubernetesService.createConfigMap(archive, config.namespace);
+
+      // Build testrun
+      const testRunManifest = buildTestRunManifest(configMap, archive, config, envVars);
+
+      // Create testrun resource
+      const testRunResult = await kubernetesService.createTestRun(testRunManifest);
+
+      // Persist last run state for use by logs/status/delete commands
       await saveLastRun({
         testRunName: testRunManifest.metadata.name,
         namespace: testRunManifest.metadata.namespace,
-        volumeClaimName: volumeClaimResult.volumeClaimName,
+        configMapName: configMap.configMapName,
         scriptPath,
         createdAt: new Date().toISOString(),
       });
       logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
-      return;
-    }
-
-    // Create configmap for test script
-    const configMap = await kubernetesService.createConfigMap(archive, config.namespace);
-
-    // Build testrun
-    const testRunManifest = buildTestRunManifest(configMap, archive, config, envVars);
-
-    // Create testrun resource
-    const testRunResult = await kubernetesService.createTestRun(testRunManifest);
-
-    // Persist last run state for use by logs/status/delete commands
-    await saveLastRun({
-      testRunName: testRunManifest.metadata.name,
-      namespace: testRunManifest.metadata.namespace,
-      configMapName: configMap.configMapName,
-      scriptPath,
-      createdAt: new Date().toISOString(),
-    });
-    logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
 
   } catch (error) {
     logger.error(`Error running test: ${error instanceof Error ? error.message : String(error)}`);
