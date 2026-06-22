@@ -54,6 +54,43 @@ Example:
 
 If this file does not exist, `k6ctl` falls back to defaults.
 
+### Hooks
+
+Run commands before the test is submitted with `hooks.preRun`. Each hook receives context via environment variables:
+
+| Variable | Description |
+|---|---|
+| `K6CTL_SCRIPT_PATH` | Path to the test script |
+| `K6CTL_NAMESPACE` | Target namespace |
+| `K6CTL_PARALLELISM` | Parallelism value |
+| `K6CTL_HOOK_PHASE` | `pre-run` |
+
+```json
+{
+  "hooks": {
+    "preRun": [
+      {
+        "name": "build",
+        "command": "npm run build",
+        "timeout": 60,
+        "continueOnError": false,
+        "workingDir": "./"
+      }
+    ]
+  }
+}
+```
+
+Hook fields:
+
+- `name`: Display name for the hook
+- `command`: Shell command to run
+- `timeout`: Seconds before the hook is killed (default: `60`)
+- `continueOnError`: If `true`, a failing hook does not abort the run (default: `false`)
+- `workingDir`: Working directory for the command (optional)
+
+Use `--skip-hooks` on `k6ctl run` to bypass all hooks, or `--skip-pre-hooks` to skip only pre-run hooks.
+
 ## Usage
 
 ### Step-by-step workflow
@@ -174,6 +211,11 @@ k6ctl status -n load-tests
 
 This prints TestRun details and related pod status.
 
+Status options:
+
+- `-n, --namespace <namespace>`: Kubernetes namespace
+- `-v, --verbose`: Show extra columns (node name, etc.)
+
 ### Logs command
 
 Show logs for pods linked to the last saved run:
@@ -182,15 +224,26 @@ Show logs for pods linked to the last saved run:
 k6ctl logs
 ```
 
-Specify namespace and container:
+Stream logs in real-time:
 
 ```bash
-k6ctl logs -n load-tests -c runner
+k6ctl logs --follow
 ```
 
-Logs command options:
+Filter by pod type and show only the last 50 lines:
 
-- `-n, --namespace <namespace>`: Override namespace stored in last run
+```bash
+k6ctl logs --type runner --tail 50
+```
+
+Logs options:
+
+- `-n, --namespace <namespace>`: Kubernetes namespace
+- `-f, --follow`: Stream logs in real-time
+- `-t, --tail <lines>`: Number of log lines to show from history (default: 100)
+- `-p, --pod <name>`: Show logs from a specific pod
+- `--type <type>`: Filter by pod type (`runner`, `initializer`, `starter`)
+- `--timestamps`: Show timestamps in log output
 - `-c, --container <name>`: Container name to fetch logs from
 
 ### Delete command
@@ -228,8 +281,8 @@ Delete command options:
 ```bash
 k6ctl run [script] [options]
 k6ctl list [type] [-n <namespace>]
-k6ctl status [-n <namespace>]
-k6ctl logs [-n <namespace>] [-c <container>]
+k6ctl status [-n <namespace>] [-v]
+k6ctl logs [-n <namespace>] [-f] [-t <lines>] [-p <pod>] [--type <type>] [--timestamps]
 k6ctl delete [--keep-script] [-n <namespace>] [-p <pod>] [-t <testrun>] [-c <configmap>]
 ```
 
