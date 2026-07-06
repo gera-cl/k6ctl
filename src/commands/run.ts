@@ -124,85 +124,95 @@ export async function runTest(scriptPath: string, options: RunOptions) {
     }
 
     // Load test script (with environment variables for k6 archive)
-      let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
+    let archive = await scriptService.archiveTest(scriptPath, undefined, envVars);
 
+    const inspectResult = await scriptService.inspectScript(scriptPath);
+    const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
 
-      // Analyze script if smart option is enabled
-      if (options.smart) {
-        logger.info(`Analyzing script: ${scriptPath}`);
-        if (!options.defaultVusPerPod) {
-          options.defaultVusPerPod = DEFAULT_VUS_PER_POD;
-        }
-        if (!options.maxIterationDuration) {
-          options.maxIterationDuration = MAX_ITERATION_DURATION;
-        }
-        const inspectResult = await scriptService.inspectScript(scriptPath, envVars);
-        const scenarioMetrics: K6ScenarioMetrics[] = await analyzeScript(inspectResult);
-        if (scenarioMetrics) {
-          const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
-          const totalRecommendedMaxVUs = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.recommendedMaxVUs ?? 0), 0);
-          const parallelism = Math.ceil(totalRecommendedMaxVUs / (options.defaultVusPerPod)) || 1;
-          const peakTps = scenarioMetrics.reduce((max, metrics) => Math.max(max, metrics?.peakTps ?? 0), 0);
-
-          config.parallelism = parallelism;
-
-          logger.info(`Total recommendedMaxVUs: ${Math.ceil(totalRecommendedMaxVUs)} 
-          based on scenario analysis and --max-iteration-duration=${(options.maxIterationDuration)} seconds
-          per iteration assumption with a safety factor of 1.2 applied to account for variability in iteration duration and ensure we have enough VUs 
-          to meet the target TPS. This is an estimate and actual resource needs may vary based on the specific workload and environment.
-          Consider monitoring the test run and adjusting resources as needed.`);
-
-          logger.info(`Calculated parallelism: ${parallelism} (based on --default-vus-per-pod=${(options.defaultVusPerPod)})`);
-          logger.info(`Peak TPS: ${peakTps.toFixed(2)}`);
-          logger.info(`Estimated Total Iterations: ${Math.round(estimatedTotalIterations)}`);
-          logger.info(`Using --max-iteration-duration=${(options.maxIterationDuration)} seconds`);
-          logger.info(`Using safety factor of 1.2 to calculate recommended VUs.`);
-          logger.info(`Using --default-vus-per-pod=${(options.defaultVusPerPod)} to calculate parallelism.`);
-
-          // Extract, modify, and recompress the archive
-          archive = await scriptService.extractModifyAndRecompress(archive, scenarioMetrics);
-        }
-      } else {
-        logger.info('Smart scenario analysis is disabled. Running test without previous analysis.');
+    // Analyze script if smart option is enabled
+    if (options.smart) {
+      logger.info(`Analyzing script: ${scriptPath}`);
+      if (!options.defaultVusPerPod) {
+        options.defaultVusPerPod = DEFAULT_VUS_PER_POD;
       }
+      if (!options.maxIterationDuration) {
+        options.maxIterationDuration = MAX_ITERATION_DURATION;
+      }
+      if (scenarioMetrics) {
+        const estimatedTotalIterations = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.totalIterations ?? 0), 0);
+        const totalRecommendedMaxVUs = scenarioMetrics.reduce((sum, metrics) => sum + (metrics?.recommendedMaxVUs ?? 0), 0);
+        const parallelism = Math.ceil(totalRecommendedMaxVUs / (options.defaultVusPerPod)) || 1;
+        const peakTps = scenarioMetrics.reduce((max, metrics) => Math.max(max, metrics?.peakTps ?? 0), 0);
 
-      if (archive.archiveSize > 1024 * 1024) {
-        // Volume flow
-        logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);
+        config.parallelism = parallelism;
 
-        const volumeClaimResult = await kubernetesService.createPVCWithArchive(archive, config.namespace);
-        const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
-        await kubernetesService.createTestRun(testRunManifest);
+        const headers = ['Scenarios', 'Peak TPS', 'Iterations', 'Max Iteration', 'Safety', 'VUs/Pod', 'Parallelism'];
+        const rows = [
+          [
+            scenarioMetrics.length.toString(),
+            peakTps.toFixed(2),
+            Math.round(estimatedTotalIterations).toLocaleString(),
+            `${options.maxIterationDuration}s`,
+            '1.2x',
+            options.defaultVusPerPod.toString(),
+            parallelism.toString(),
+          ]
+        ];
+        printData("Execution Plan", headers, rows);
+        archive = await scriptService.extractModifyAndRecompress(archive, scenarioMetrics);
+      }
+    } else {
+      logger.info('Smart scenario analysis is disabled. Running test without previous analysis.');
+    }
 
-        await saveLastRun({
-          testRunName: testRunManifest.metadata.name,
-          namespace: testRunManifest.metadata.namespace,
-          volumeClaimName: volumeClaimResult.volumeClaimName,
-          scriptPath,
-          createdAt: new Date().toISOString(),
-        });
-        logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
+    // Show execution summary and confirm
+    if (scenarioMetrics && scenarioMetrics.length > 0 && scenarioMetrics[0]) {
+      const confirmed = await showExecutionSummaryAndConfirm(scenarioMetrics);
+      if (!confirmed) {
+        logger.info('Test execution cancelled by user.');
         return;
       }
+    } else if (!scenarioMetrics || scenarioMetrics.length === 0) {
+      logger.info('No scenarios found. Proceeding with test execution.');
+    }
 
-      // Create configmap for test script
-      const configMap = await kubernetesService.createConfigMap(archive, config.namespace);
+    if (archive.archiveSize > 1024 * 1024) {
+      // Volume flow
+      logger.info(`Test script archive size (${(archive.archiveSize / (1024 * 1024)).toFixed(2)} MB) exceeds 1 MB, using volume flow.`);
 
-      // Build testrun
-      const testRunManifest = buildTestRunManifest(configMap, archive, config, envVars);
+      const volumeClaimResult = await kubernetesService.createPVCWithArchive(archive, config.namespace);
+      const testRunManifest = buildTestRunManifestWithVolumeClaim(volumeClaimResult, config, envVars);
+      await kubernetesService.createTestRun(testRunManifest);
 
-      // Create testrun resource
-      const testRunResult = await kubernetesService.createTestRun(testRunManifest);
-
-      // Persist last run state for use by logs/status/delete commands
       await saveLastRun({
         testRunName: testRunManifest.metadata.name,
         namespace: testRunManifest.metadata.namespace,
-        configMapName: configMap.configMapName,
+        volumeClaimName: volumeClaimResult.volumeClaimName,
         scriptPath,
         createdAt: new Date().toISOString(),
       });
       logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
+      return;
+    }
+
+    // Create configmap for test script
+    const configMap = await kubernetesService.createConfigMap(archive, config.namespace);
+
+    // Build testrun
+    const testRunManifest = buildTestRunManifest(configMap, archive, config, envVars);
+
+    // Create testrun resource
+    const testRunResult = await kubernetesService.createTestRun(testRunManifest);
+
+    // Persist last run state for use by logs/status/delete commands
+    await saveLastRun({
+      testRunName: testRunManifest.metadata.name,
+      namespace: testRunManifest.metadata.namespace,
+      configMapName: configMap.configMapName,
+      scriptPath,
+      createdAt: new Date().toISOString(),
+    });
+    logger.info(`Last run saved: ${testRunManifest.metadata.name} (namespace: ${testRunManifest.metadata.namespace})`);
 
   } catch (error) {
     logger.error(`Error running test: ${error instanceof Error ? error.message : String(error)}`);
@@ -304,4 +314,47 @@ function parseDurationToSeconds(duration: string): number {
 function parseTimeUnitToSeconds(timeUnit?: string): number {
   if (!timeUnit) return 1;
   return parseDurationToSeconds(timeUnit);
+}
+
+async function showExecutionSummaryAndConfirm(scenarioMetrics: K6ScenarioMetrics[]): Promise<boolean> {
+  const headers = ['Name', 'TPS', 'Iterations', 'Req VUs', 'Rec VUs', 'Stages'];
+  const rows = scenarioMetrics.map((metric) => [
+    metric.name,
+    metric.peakTps.toFixed(0),
+    Math.round(metric.totalIterations).toLocaleString(),
+    Math.ceil(metric.requiredMaxVUs).toString(),
+    Math.ceil(metric.recommendedMaxVUs ?? metric.requiredMaxVUs).toString(),
+    (metric.stageMetrics?.length ?? 0).toString(),
+  ]);
+  printData("Execution Summary", headers, rows);
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question('Proceed with test execution? (yes/no): ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y');
+    });
+  });
+}
+
+function printData(title: string, headers: string[], rows: string[][]) {
+  console.log(`\n${title}:\n`);
+  const colWidths = headers.map((header, i) =>
+    Math.max(header.length, ...rows.map((row) => row[i].length))
+  );
+  console.log(
+    headers
+      .map((header, i) => header.padEnd(colWidths[i]))
+      .join('   ')
+  );
+  rows.forEach((row) => {
+    console.log(
+      row
+        .map((cell, i) => {
+          const isNumeric = i > 0;
+          return isNumeric ? cell.padStart(colWidths[i]) : cell.padEnd(colWidths[i]);
+        })
+        .join('   ')
+    );
+  });
+  console.log('');
 }

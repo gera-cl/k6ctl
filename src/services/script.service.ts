@@ -135,7 +135,7 @@ export class ScriptService {
         throw new Error(`Failed to create modified archive at path: ${outputArchivePath}`);
       }
 
-      logger.info(`Archive metadata updated successfully: ${outputArchivePath}`);
+      logger.debug(`Archive metadata updated successfully: ${outputArchivePath}`);
 
       return {
         archivePath: outputArchivePath,
